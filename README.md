@@ -13,6 +13,10 @@
 
 直接打开 `index.html` 即可运行。
 
+## 在线访问
+
+- 个人部署地址：[https://stock.fch-nas.cc](https://stock.fch-nas.cc)
+
 ## 署名与来源
 
 - 原作者：NGA 大时代用户 `Lyssssss`
