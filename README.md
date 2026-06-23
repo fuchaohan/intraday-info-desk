@@ -17,6 +17,10 @@
 
 - 个人部署地址：[https://stock.fch-nas.cc](https://stock.fch-nas.cc)
 
+## 说明
+
+- 本仓库仅为搬运备份到 GitHub 上。
+
 ## 署名与来源
 
 - 原作者：NGA 大时代用户 `Lyssssss`
