@@ -15,7 +15,9 @@
 
 ## 在线访问
 
-- 个人部署地址：[https://stock.fch-nas.cc](https://stock.fch-nas.cc)
+- Cloudflare 托管：[https://stock.fch-nas.cc](https://stock.fch-nas.cc)
+- EdgeOne 托管：[https://index.fch-nas.top](https://index.fch-nas.top)
+- GitHub 托管：[https://stock.fch-nas.site](https://stock.fch-nas.site)
 
 ## 说明
 
