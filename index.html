@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>盘中信息台 · 板块资金流</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
 <style>
  :root{
   --bg:#08111f; --bg-soft:#0d1830;
@@ -28,7 +30,7 @@
   background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),
     linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);
   background-size:28px 28px;
-  mask-image:linear-gradient(180deg,rgba(255,255,255,0.5),transparent 85%);opacity:.2}
+  -webkit-mask-image:linear-gradient(180deg,rgba(255,255,255,0.5),transparent 85%);mask-image:linear-gradient(180deg,rgba(255,255,255,0.5),transparent 85%);opacity:.2}
  .app{max-width:1320px;margin:0 auto;padding:26px 18px 40px;position:relative;z-index:1}
 
  /* hero */
@@ -37,6 +39,11 @@
   background:linear-gradient(135deg,rgba(21,38,79,0.92),rgba(9,18,39,0.85));
   box-shadow:var(--shadow);backdrop-filter:blur(14px);flex-wrap:wrap}
  .hero h1{margin:0;font-size:30px;letter-spacing:.02em}
+ .hero-title{display:flex;align-items:center;gap:13px;min-width:0}
+ .hero-title svg,.hero-title img{width:auto;height:44px;max-width:230px;flex:none;object-fit:contain;display:block}
+ .hero-title img{filter:drop-shadow(0 8px 18px rgba(74,134,255,.30))}
+ @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.28}}
+ .logo-live{animation:livePulse 1.8s ease-in-out infinite}
  .hero p{margin:8px 0 0;color:var(--muted);line-height:1.6;max-width:760px;font-size:13px}
  .hero-badge-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
  .badge{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;
@@ -121,7 +128,7 @@
 
  <header class="hero">
   <div>
-   <h1>盘中信息台</h1>
+   <h1 class="hero-title"><img id="logoSlot" src="assets/logo.png" alt="盘中信息台" title="盘中信息台 · 板块资金流">盘中信息台</h1>
    <p>A 股盘中实时信息台。当前模块：跟踪各板块 / 概念的主力资金动向——当日累计净流入排行、分时累计曲线，并自动监测近 5 分钟的资金异动（急流入 / 急流出）。</p>
    <div class="hero-badge-row">
     <span class="badge" id="kindBadge">概念板块</span>
@@ -138,7 +145,7 @@
    </div>
    <div class="btn-row">
     <button class="btn" id="refreshBtn">↻ 立即刷新</button>
-    <button class="btn secondary" id="kindBtn">切换 概念/行业</button>
+    <button class="btn secondary" id="kindBtn">切换 行业/概念</button>
    </div>
   </div>
  </header>
@@ -199,11 +206,14 @@
 <script>
 /* ============ 配置 ============ */
 const CFG = {
-  industry:false, top:8, intervalSec:300,
+  industry:true, top:8, intervalSec:300,
   anomalyWin:5, anomalyRank:3, anomalyFloor:2.0,
   host:"https://push2delay.eastmoney.com",
 };
-const TRADE26 = "0105,0106,0107,0108,0109,0112,0113,0114,0115,0116,0119,0120,0121,0122,0123,0126,0127,0128,0129,0130,0202,0203,0204,0205,0206,0209,0210,0211,0212,0213,0224,0225,0226,0227,0302,0303,0304,0305,0306,0309,0310,0311,0312,0313,0316,0317,0318,0319,0320,0323,0324,0325,0326,0327,0330,0331,0401,0402,0403,0407,0408,0409,0410,0413,0414,0415,0416,0417,0420,0421,0422,0423,0424,0427,0428,0429,0430,0506,0507,0508,0511,0512,0513,0514,0515,0518,0519,0520,0521,0522,0525,0526,0527,0528,0529,0601,0602,0603,0604,0605,0608,0609,0610,0611,0612,0615,0616,0617,0618,0622,0623,0624,0625,0626,0629,0630,0701,0702,0703,0706,0707,0708,0709,0710,0713,0714,0715,0716,0717,0720,0721,0722,0723,0724,0727,0728,0729,0730,0731,0803,0804,0805,0806,0807,0810,0811,0812,0813,0814,0817,0818,0819,0820,0821,0824,0825,0826,0827,0828,0831,0901,0902,0903,0904,0907,0908,0909,0910,0911,0914,0915,0916,0917,0918,0921,0922,0923,0924,0928,0929,0930,1008,1009,1012,1013,1014,1015,1016,1019,1020,1021,1022,1023,1026,1027,1028,1029,1030,1102,1103,1104,1105,1106,1109,1110,1111,1112,1113,1116,1117,1118,1119,1120,1123,1124,1125,1126,1127,1130,1201,1202,1203,1204,1207,1208,1209,1210,1211,1214,1215,1216,1217,1218,1221,1222,1223,1224,1225,1228,1229,1230,1231".split(",");
+/* 交易日历：精确到月日的全年交易日（含调休）。跨年后请更新 TRADE_CAL.year 与下方日历；
+   未更新时回退为「周一至周五」近似判断，不会整年锁死在非交易日。 */
+const TRADE_CAL={year:2026,days:
+"0105,0106,0107,0108,0109,0112,0113,0114,0115,0116,0119,0120,0121,0122,0123,0126,0127,0128,0129,0130,0202,0203,0204,0205,0206,0209,0210,0211,0212,0213,0224,0225,0226,0227,0302,0303,0304,0305,0306,0309,0310,0311,0312,0313,0316,0317,0318,0319,0320,0323,0324,0325,0326,0327,0330,0331,0401,0402,0403,0407,0408,0409,0410,0413,0414,0415,0416,0417,0420,0421,0422,0423,0424,0427,0428,0429,0430,0506,0507,0508,0511,0512,0513,0514,0515,0518,0519,0520,0521,0522,0525,0526,0527,0528,0529,0601,0602,0603,0604,0605,0608,0609,0610,0611,0612,0615,0616,0617,0618,0622,0623,0624,0625,0626,0629,0630,0701,0702,0703,0706,0707,0708,0709,0710,0713,0714,0715,0716,0717,0720,0721,0722,0723,0724,0727,0728,0729,0730,0731,0803,0804,0805,0806,0807,0810,0811,0812,0813,0814,0817,0818,0819,0820,0821,0824,0825,0826,0827,0828,0831,0901,0902,0903,0904,0907,0908,0909,0910,0911,0914,0915,0916,0917,0918,0921,0922,0923,0924,0928,0929,0930,1008,1009,1012,1013,1014,1015,1016,1019,1020,1021,1022,1023,1026,1027,1028,1029,1030,1102,1103,1104,1105,1106,1109,1110,1111,1112,1113,1116,1117,1118,1119,1120,1123,1124,1125,1126,1127,1130,1201,1202,1203,1204,1207,1208,1209,1210,1211,1214,1215,1216,1217,1218,1221,1222,1223,1224,1225,1228,1229,1230,1231".split(",")};
 
 /* ============ 篮子过滤（与 sector_fundflow.py BLOCK_SUBSTR 同步）============ */
 const BLOCK = ["融资融券","富时","罗素","MSCI","标普","道琼斯","股通","北向","北上",
@@ -276,17 +286,17 @@ function hslHex(h,s,l){const c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)
 function niceStep(span,target=6){if(span<=0)return 1;const raw=span/target;
   const mag=raw>=1?Math.pow(10,String(Math.floor(raw)).length-1):0.1;
   for(const mm of [1,2,2.5,5,10])if(raw<=mm*mag)return mm*mag;return 10*mag;}
-function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 function renderSVG(seriesList,title){
   const W=1024,H=520,ML=58,MR=210,MT=30,MB=40,pw=W-ML-MR,ph=H-MT-MB;
   const axis=[],seen=new Set();
   for(const [,s] of seriesList)for(const [t] of s)if(!seen.has(t)){seen.add(t);axis.push(t);}
-  if(!axis.length){LASTCHART=null;return '<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="120"><text x="20" y="60" fill="#90a7cf" font-family="Microsoft YaHei">暂无分时数据（非交易时段或数据未就绪）</text></svg>';}
+  if(!axis.length){LASTCHART=null;return '<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="120" role="img" aria-label="暂无分时数据"><text x="20" y="60" fill="#90a7cf" font-family="Microsoft YaHei">暂无分时数据（非交易时段或数据未就绪）</text></svg>';}
   const xidx={};axis.forEach((t,i)=>xidx[t]=i);const nx=Math.max(axis.length-1,1);
   let vals=[];for(const [,s] of seriesList)for(const [,v] of s)vals.push(v);
   let vmin=Math.min(...vals),vmax=Math.max(...vals);const pad=(vmax-vmin)*0.06||1;vmin-=pad;vmax+=pad;
   const X=i=>ML+pw*i/nx,Y=v=>MT+ph*(vmax-v)/(vmax-vmin);
-  const P=['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" font-family="Inter, Microsoft YaHei, sans-serif">'];
+  const P=['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(title)+'" font-family="Inter, Microsoft YaHei, sans-serif">'];
   const step=niceStep(vmax-vmin);let g=(Math.floor(vmin/step)-1)*step;
   while(g<=vmax){if(g>=vmin&&g<=vmax){const y=Y(g),zero=Math.abs(g)<1e-9;
     P.push('<line x1="'+ML+'" y1="'+y.toFixed(1)+'" x2="'+(ML+pw)+'" y2="'+y.toFixed(1)+'" stroke="'+(zero?'rgba(125,154,211,0.45)':'rgba(125,154,211,0.13)')+'" stroke-width="1"/>');
@@ -303,7 +313,9 @@ function renderSVG(seriesList,title){
     P.push('<circle cx="'+ex.toFixed(1)+'" cy="'+ey.toFixed(1)+'" r="2.6" fill="'+color+'"/>');labels.push([ey,name,final,color]);});
   labels.sort((a,b)=>a[0]-b[0]);
   for(let i=1;i<labels.length;i++)if(labels[i][0]-labels[i-1][0]<14)labels[i][0]=labels[i-1][0]+14;
-  const overflow=labels.length?labels[labels.length-1][0]-(H-6):0;if(overflow>0)labels.forEach(r=>r[0]-=overflow);
+  /* 底部溢出时整体上移，但上移量受顶部空间限制，避免把标签顶进图标题区 */
+  const overflow=labels.length?labels[labels.length-1][0]-(H-6):0;
+  if(overflow>0){const topLimit=labels[0][0]-(MT+2);labels.forEach(r=>r[0]-=Math.min(overflow,topLimit));}
   const lx=ML+pw+10;
   for(const [y,name,final,color] of labels)
     P.push('<text x="'+lx+'" y="'+(y+4).toFixed(1)+'" font-size="12" fill="'+color+'">'+esc(name)+' '+(final>=0?"+":"")+final.toFixed(2)+'亿</text>');
@@ -329,17 +341,21 @@ function scanAnom(curr,prev,rank,floor){if(!prev)return [[],[]];const ds=[];
 
 /* ============ 状态 ============ */
 function pad2(n){return (n<10?"0":"")+n;}
-function isTradingDay(d){return TRADE26.includes(pad2(d.getMonth()+1)+pad2(d.getDate()))&&d.getFullYear()===2026;}
+function isTradingDay(d){
+  if(d.getFullYear()===TRADE_CAL.year)return TRADE_CAL.days.includes(pad2(d.getMonth()+1)+pad2(d.getDate()));
+  const day=d.getDay();return day!==0&&day!==6; /* 跨年兜底：周一至周五近似（节假日误差由更新日历消除） */
+}
 function tradingNow(d){const t=d.getHours()*60+d.getMinutes();return isTradingDay(d)&&((t>=570&&t<=690)||(t>=780&&t<=900));}
 function statusText(d){if(!isTradingDay(d))return "⚪ 非交易日（最近收盘）";
   if(tradingNow(d))return "🟢 盘中实时";const t=d.getHours()*60+d.getMinutes();
   if(t>690&&t<780)return "🟡 午间休市";return "🔵 盘前/已收盘";}
 
 /* ============ 主刷新 ============ */
-let nextAt=0,busy=false;
+let nextAt=0,busy=false,pendingToggle=false;
 function fmt(v){return (v>=0?"+":"")+v.toFixed(1)+"亿";}
 async function refresh(){
-  if(busy)return;busy=true;
+  if(busy){pendingToggle=true;return;} /* 抓取进行中收到刷新请求：标记为待办，本轮结束后立即补一次 */
+  busy=true;
   document.getElementById("status").textContent="⏳ 抓取中…";
   try{
     const sectors=await fetchAllSectors(CFG.industry);
@@ -393,8 +409,9 @@ async function refresh(){
     document.getElementById("modTime").innerHTML=`更新 ${now.toLocaleTimeString("zh-CN")}<br>截至 ${lastT} · ${stxt}`;
     nextAt=Date.now()+CFG.intervalSec*1000;
   }catch(e){
-    document.getElementById("status").textContent="❌ 抓取失败："+e.message+"（检查能否直连东财）";
-  }finally{busy=false;}
+    document.getElementById("status").textContent="❌ 抓取失败："+e.message+"（30 秒后自动重试）";
+    nextAt=Date.now()+30000; /* 失败后 30 秒自动重试，不再永久停摆等手动刷新 */
+  }finally{busy=false;if(pendingToggle){pendingToggle=false;refresh();}}
 }
 function tick(){if(nextAt){let s=Math.max(0,Math.round((nextAt-Date.now())/1000));
   document.getElementById("countdown").textContent=Math.floor(s/60)+"分"+pad2(s%60)+"秒";
@@ -406,7 +423,9 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");document.getElementById("sec-"+b.dataset.tab).classList.add("active");
 });
-document.getElementById("kindBtn").onclick=()=>{CFG.industry=!CFG.industry;HISTORY.length=0;refresh();};
+document.getElementById("kindBtn").onclick=()=>{CFG.industry=!CFG.industry;
+  document.getElementById("kindBtn").textContent="切换 "+(CFG.industry?"行业/概念":"概念/行业");
+  HISTORY.length=0;refresh();};
 document.getElementById("refreshBtn").onclick=()=>{if(!busy)refresh();};
 
 /* 屏蔽板块：手动输入 / 点榜单✕ / 点 chip 取消，存本地、即时生效 */
@@ -415,7 +434,7 @@ function renderBlocked(){
     `<span class="chip">${n}<b data-un="${n}" title="取消屏蔽">✕</b></span>`).join("")
     || '<span class="empty" style="padding:0">未屏蔽任何板块</span>';
 }
-function addBlock(n){n=(n||"").trim();if(n&&!BLOCKED.has(n)){BLOCKED.add(n);saveBlocked();renderBlocked();if(!busy)refresh();}}
+function addBlock(n){n=(n||"").trim();if(n&&!BLOCKED.has(n)){if(BLOCKED.size>=200)BLOCKED.delete([...BLOCKED][0]);BLOCKED.add(n);saveBlocked();renderBlocked();if(!busy)refresh();}}
 function unBlock(n){if(BLOCKED.delete(n)){saveBlocked();renderBlocked();if(!busy)refresh();}}
 document.getElementById("blockBtn").onclick=()=>{var i=document.getElementById("blockInput");addBlock(i.value);i.value="";};
 document.getElementById("blockInput").addEventListener("keydown",e=>{if(e.key==="Enter"){addBlock(e.target.value);e.target.value="";}});
@@ -451,6 +470,8 @@ renderBlocked();
   });
   chartEl.addEventListener("mouseleave",hide);
 })();
+
+/* Logo 资源在 assets/（logo.png 英雄区 + favicon.png 标签页），HTML 中静态引用 */
 
 refresh();setInterval(tick,1000);
 </script>
