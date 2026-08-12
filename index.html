@@ -212,8 +212,8 @@ const CFG = {
 };
 /* 交易日历：精确到月日的全年交易日（含调休）。跨年后请更新 TRADE_CAL.year 与下方日历；
    未更新时回退为「周一至周五」近似判断，不会整年锁死在非交易日。 */
-const TRADE_CAL={year:2026,days:
-"0105,0106,0107,0108,0109,0112,0113,0114,0115,0116,0119,0120,0121,0122,0123,0126,0127,0128,0129,0130,0202,0203,0204,0205,0206,0209,0210,0211,0212,0213,0224,0225,0226,0227,0302,0303,0304,0305,0306,0309,0310,0311,0312,0313,0316,0317,0318,0319,0320,0323,0324,0325,0326,0327,0330,0331,0401,0402,0403,0407,0408,0409,0410,0413,0414,0415,0416,0417,0420,0421,0422,0423,0424,0427,0428,0429,0430,0506,0507,0508,0511,0512,0513,0514,0515,0518,0519,0520,0521,0522,0525,0526,0527,0528,0529,0601,0602,0603,0604,0605,0608,0609,0610,0611,0612,0615,0616,0617,0618,0622,0623,0624,0625,0626,0629,0630,0701,0702,0703,0706,0707,0708,0709,0710,0713,0714,0715,0716,0717,0720,0721,0722,0723,0724,0727,0728,0729,0730,0731,0803,0804,0805,0806,0807,0810,0811,0812,0813,0814,0817,0818,0819,0820,0821,0824,0825,0826,0827,0828,0831,0901,0902,0903,0904,0907,0908,0909,0910,0911,0914,0915,0916,0917,0918,0921,0922,0923,0924,0928,0929,0930,1008,1009,1012,1013,1014,1015,1016,1019,1020,1021,1022,1023,1026,1027,1028,1029,1030,1102,1103,1104,1105,1106,1109,1110,1111,1112,1113,1116,1117,1118,1119,1120,1123,1124,1125,1126,1127,1130,1201,1202,1203,1204,1207,1208,1209,1210,1211,1214,1215,1216,1217,1218,1221,1222,1223,1224,1225,1228,1229,1230,1231".split(",")};
+const TRADE_CAL={year:2026,days:new Set(
+"0105,0106,0107,0108,0109,0112,0113,0114,0115,0116,0119,0120,0121,0122,0123,0126,0127,0128,0129,0130,0202,0203,0204,0205,0206,0209,0210,0211,0212,0213,0224,0225,0226,0227,0302,0303,0304,0305,0306,0309,0310,0311,0312,0313,0316,0317,0318,0319,0320,0323,0324,0325,0326,0327,0330,0331,0401,0402,0403,0407,0408,0409,0410,0413,0414,0415,0416,0417,0420,0421,0422,0423,0424,0427,0428,0429,0430,0506,0507,0508,0511,0512,0513,0514,0515,0518,0519,0520,0521,0522,0525,0526,0527,0528,0529,0601,0602,0603,0604,0605,0608,0609,0610,0611,0612,0615,0616,0617,0618,0622,0623,0624,0625,0626,0629,0630,0701,0702,0703,0706,0707,0708,0709,0710,0713,0714,0715,0716,0717,0720,0721,0722,0723,0724,0727,0728,0729,0730,0731,0803,0804,0805,0806,0807,0810,0811,0812,0813,0814,0817,0818,0819,0820,0821,0824,0825,0826,0827,0828,0831,0901,0902,0903,0904,0907,0908,0909,0910,0911,0914,0915,0916,0917,0918,0921,0922,0923,0924,0928,0929,0930,1008,1009,1012,1013,1014,1015,1016,1019,1020,1021,1022,1023,1026,1027,1028,1029,1030,1102,1103,1104,1105,1106,1109,1110,1111,1112,1113,1116,1117,1118,1119,1120,1123,1124,1125,1126,1127,1130,1201,1202,1203,1204,1207,1208,1209,1210,1211,1214,1215,1216,1217,1218,1221,1222,1223,1224,1225,1228,1229,1230,1231".split(","))};
 
 /* ============ 篮子过滤（与 sector_fundflow.py BLOCK_SUBSTR 同步）============ */
 const BLOCK = ["融资融券","富时","罗素","MSCI","标普","道琼斯","股通","北向","北上",
@@ -222,7 +222,9 @@ const BLOCK = ["融资融券","富时","罗素","MSCI","标普","道琼斯","股
  "央企","标准普尔","权重","深成","HS300","沪深","深证","上证","全指","成份","成分",
  "百元股","热股","振幅","昨日","涨停","跌停","连板","近端次新","次新股","龙头","白马股","蓝筹",
  "风格","趋势股","茅指数","组合","微盘","ST股","低价","举牌","红利","扭亏","季报","年报","中报"];
-const isBasket = n => BLOCK.some(k => n.includes(k));
+/* 预编译为单个正则：关键词均为无元字符的普通字面量，join 后一次 test 替代 ~50 次 includes */
+const BLOCK_RE = new RegExp(BLOCK.join("|"));
+const isBasket = n => BLOCK_RE.test(n);
 
 /* 行业白名单：对齐东财 App 自有行业（近似）。基线=申万二级，
    并按用户确认的东财口径修正：电力设备/有色金属 用整体聚合（删其子行业避免重复）、补入机器人。
@@ -254,13 +256,12 @@ function jsonp(url){
 }
 async function fetchAllSectors(industry){
   const fs=industry?"m:90+t:2":"m:90+t:3";const merged={};
-  for(let pn=1;pn<=8;pn++){
+  const pages=await Promise.all(Array.from({length:8},(_,i)=>{
+    const pn=i+1;
     const url=`${CFG.host}/api/qt/clist/get?fid=f62&po=1&pz=100&pn=${pn}&np=1&fltt=2&invt=2&fs=${fs}&fields=f12,f14,f62`;
-    let d;try{d=await jsonp(url);}catch(e){break;}
-    const diff=(d.data&&d.data.diff)||[];if(!diff.length)break;
-    for(const x of diff){merged[x.f12]=[x.f12,x.f14,+x.f62];}
-    if(diff.length<100)break;
-  }
+    return jsonp(url).then(d=>(d.data&&d.data.diff)||[]).catch(()=>[]); /* 单页失败返回空，不中断整体 */
+  }));
+  for(const diff of pages){for(const x of diff){merged[x.f12]=[x.f12,x.f14,+x.f62];}}
   return Object.values(merged).sort((a,b)=>b[2]-a[2]);
 }
 async function fetchIntraday(code){
@@ -342,7 +343,7 @@ function scanAnom(curr,prev,rank,floor){if(!prev)return [[],[]];const ds=[];
 /* ============ 状态 ============ */
 function pad2(n){return (n<10?"0":"")+n;}
 function isTradingDay(d){
-  if(d.getFullYear()===TRADE_CAL.year)return TRADE_CAL.days.includes(pad2(d.getMonth()+1)+pad2(d.getDate()));
+  if(d.getFullYear()===TRADE_CAL.year)return TRADE_CAL.days.has(pad2(d.getMonth()+1)+pad2(d.getDate()));
   const day=d.getDay();return day!==0&&day!==6; /* 跨年兜底：周一至周五近似（节假日误差由更新日历消除） */
 }
 function tradingNow(d){const t=d.getHours()*60+d.getMinutes();return isTradingDay(d)&&((t>=570&&t<=690)||(t>=780&&t<=900));}
@@ -351,12 +352,26 @@ function statusText(d){if(!isTradingDay(d))return "⚪ 非交易日（最近收�
   if(t>690&&t<780)return "🟡 午间休市";return "🔵 盘前/已收盘";}
 
 /* ============ 主刷新 ============ */
+/* DOM 节点缓存：避免 refresh/tick 每轮重复 getElementById（script 位于 body 末尾，元素均已就绪） */
+const $ = id => document.getElementById(id);
+const EL = {
+  status:$("status"), updated:$("updated"), lastt:$("lastt"), countdown:$("countdown"),
+  kindBadge:$("kindBadge"), chartsvg:$("chartsvg"), chart:$("chart"),
+  crosshair:$("crosshair"), tooltip:$("tooltip"), lb:$("lb"),
+  anomh:$("anomh"), anom:$("anom"),
+  cardIn:$("cardIn"), cardInMeta:$("cardInMeta"),
+  cardOut:$("cardOut"), cardOutMeta:$("cardOutMeta"),
+  cardAnom:$("cardAnom"), cardAnomMeta:$("cardAnomMeta"),
+  cardBreadth:$("cardBreadth"), cardBreadthMeta:$("cardBreadthMeta"),
+  modTime:$("modTime"), kindBtn:$("kindBtn"), refreshBtn:$("refreshBtn"),
+  blockBtn:$("blockBtn"), blockInput:$("blockInput"), blockChips:$("blockChips"),
+};
 let nextAt=0,busy=false,pendingToggle=false;
 function fmt(v){return (v>=0?"+":"")+v.toFixed(1)+"亿";}
 async function refresh(){
   if(busy){pendingToggle=true;return;} /* 抓取进行中收到刷新请求：标记为待办，本轮结束后立即补一次 */
   busy=true;
-  document.getElementById("status").textContent="⏳ 抓取中…";
+  EL.status.textContent="⏳ 抓取中…";
   try{
     const sectors=await fetchAllSectors(CFG.industry);
     const curr={};let nin=0,nout=0;
@@ -368,53 +383,53 @@ async function refresh(){
 
     const now=new Date();const kind=CFG.industry?"行业":"概念";
     const lastT=seriesList.length?seriesList[0][1][seriesList[0][1].length-1][0]:"—";
-    document.getElementById("chartsvg").innerHTML=renderSVG(seriesList,kind+"板块 主力资金净流入（累计·亿元）  截至 "+lastT);
+    EL.chartsvg.innerHTML=renderSVG(seriesList,kind+"板块 主力资金净流入（累计·亿元）  截至 "+lastT);
 
     // 榜单
     const lin=seriesList.filter(r=>r[2]>=0).slice(0,CFG.top);
     const lout=seriesList.filter(r=>r[2]<0).slice(-CFG.top).reverse();
-    let h="";lin.forEach(r=>h+=`<tr><td class="in">▲ ${r[0]}</td><td class="v in">${fmt(r[2])}</td><td class="x"><span class="b" data-n="${r[0]}" title="屏蔽此板块">✕</span></td></tr>`);
-    lout.forEach(r=>h+=`<tr><td class="out">▼ ${r[0]}</td><td class="v out">${fmt(r[2])}</td><td class="x"><span class="b" data-n="${r[0]}" title="屏蔽此板块">✕</span></td></tr>`);
-    document.getElementById("lb").innerHTML=h||'<tr><td class="empty">暂无</td></tr>';
+    let h="";lin.forEach(r=>h+=`<tr><td class="in">▲ ${esc(r[0])}</td><td class="v in">${fmt(r[2])}</td><td class="x"><span class="b" data-n="${esc(r[0])}" title="屏蔽此板块">✕</span></td></tr>`);
+    lout.forEach(r=>h+=`<tr><td class="out">▼ ${esc(r[0])}</td><td class="v out">${fmt(r[2])}</td><td class="x"><span class="b" data-n="${esc(r[0])}" title="屏蔽此板块">✕</span></td></tr>`);
+    EL.lb.innerHTML=h||'<tr><td class="empty">暂无</td></tr>';
 
     // 异动
     let ain=[],aout=[];
     if(tradingNow(now)){const prev=pickHistory(now,CFG.anomalyWin);[ain,aout]=scanAnom(curr,prev,CFG.anomalyRank,CFG.anomalyFloor);}
     HISTORY.push({t:now,snap:curr});const cutoff=now-Math.max(40,CFG.anomalyWin*4)*60000;
     while(HISTORY.length&&HISTORY[0].t.getTime()<cutoff)HISTORY.shift();
-    document.getElementById("anomh").textContent="⚡ 近 "+CFG.anomalyWin+" 分钟异动（Δ净流入）";
+    EL.anomh.textContent="⚡ 近 "+CFG.anomalyWin+" 分钟异动（Δ净流入）";
     let a="";
-    if(ain.length){a+="<table>";ain.forEach(x=>a+=`<tr><td class="in">⚡▲ ${x[0]}</td><td class="v in">+${x[1].toFixed(1)}亿/${CFG.anomalyWin}m</td><td class="v empty">累计${fmt(x[2])}</td></tr>`);a+="</table>";}
-    if(aout.length){a+="<table>";aout.forEach(x=>a+=`<tr><td class="out">⚡▼ ${x[0]}</td><td class="v out">${x[1].toFixed(1)}亿/${CFG.anomalyWin}m</td><td class="v empty">累计${fmt(x[2])}</td></tr>`);a+="</table>";}
+    if(ain.length){a+="<table>";ain.forEach(x=>a+=`<tr><td class="in">⚡▲ ${esc(x[0])}</td><td class="v in">+${x[1].toFixed(1)}亿/${CFG.anomalyWin}m</td><td class="v empty">累计${fmt(x[2])}</td></tr>`);a+="</table>";}
+    if(aout.length){a+="<table>";aout.forEach(x=>a+=`<tr><td class="out">⚡▼ ${esc(x[0])}</td><td class="v out">${x[1].toFixed(1)}亿/${CFG.anomalyWin}m</td><td class="v empty">累计${fmt(x[2])}</td></tr>`);a+="</table>";}
     if(!ain.length&&!aout.length)a=`<div class="empty">${tradingNow(now)?"近期无超阈异动":"非盘中，不计异动"}</div>`;
-    document.getElementById("anom").innerHTML=a;
+    EL.anom.innerHTML=a;
 
     // 概览卡片
     const topIn=seriesList.find(r=>r[2]>=0), topOut=[...seriesList].reverse().find(r=>r[2]<0);
-    document.getElementById("cardIn").textContent=topIn?topIn[0]:"—";
-    document.getElementById("cardInMeta").textContent=topIn?fmt(topIn[2]):"—";
-    document.getElementById("cardOut").textContent=topOut?topOut[0]:"—";
-    document.getElementById("cardOutMeta").textContent=topOut?fmt(topOut[2]):"—";
-    document.getElementById("cardAnom").textContent=(ain.length+aout.length)+" 个";
-    document.getElementById("cardAnomMeta").textContent=tradingNow(now)?`急流入 ${ain.length} · 急流出 ${aout.length}`:"盘中才计";
-    document.getElementById("cardBreadth").textContent=nin+" / "+nout;
-    document.getElementById("cardBreadthMeta").textContent=`净流入 ${nin} · 净流出 ${nout}（共 ${nin+nout} 板块）`;
+    EL.cardIn.textContent=topIn?topIn[0]:"—";
+    EL.cardInMeta.textContent=topIn?fmt(topIn[2]):"—";
+    EL.cardOut.textContent=topOut?topOut[0]:"—";
+    EL.cardOutMeta.textContent=topOut?fmt(topOut[2]):"—";
+    EL.cardAnom.textContent=(ain.length+aout.length)+" 个";
+    EL.cardAnomMeta.textContent=tradingNow(now)?`急流入 ${ain.length} · 急流出 ${aout.length}`:"盘中才计";
+    EL.cardBreadth.textContent=nin+" / "+nout;
+    EL.cardBreadthMeta.textContent=`净流入 ${nin} · 净流出 ${nout}（共 ${nin+nout} 板块）`;
 
     // 头部时间/状态
     const stxt=statusText(now);
-    document.getElementById("status").textContent=stxt;
-    document.getElementById("kindBadge").textContent=kind+"板块";
-    document.getElementById("updated").textContent=now.toLocaleTimeString("zh-CN");
-    document.getElementById("lastt").textContent=lastT;
-    document.getElementById("modTime").innerHTML=`更新 ${now.toLocaleTimeString("zh-CN")}<br>截至 ${lastT} · ${stxt}`;
+    EL.status.textContent=stxt;
+    EL.kindBadge.textContent=kind+"板块";
+    EL.updated.textContent=now.toLocaleTimeString("zh-CN");
+    EL.lastt.textContent=lastT;
+    EL.modTime.innerHTML=`更新 ${now.toLocaleTimeString("zh-CN")}<br>截至 ${lastT} · ${stxt}`;
     nextAt=Date.now()+CFG.intervalSec*1000;
   }catch(e){
-    document.getElementById("status").textContent="❌ 抓取失败："+e.message+"（30 秒后自动重试）";
+    EL.status.textContent="❌ 抓取失败："+e.message+"（30 秒后自动重试）";
     nextAt=Date.now()+30000; /* 失败后 30 秒自动重试，不再永久停摆等手动刷新 */
   }finally{busy=false;if(pendingToggle){pendingToggle=false;refresh();}}
 }
 function tick(){if(nextAt){let s=Math.max(0,Math.round((nextAt-Date.now())/1000));
-  document.getElementById("countdown").textContent=Math.floor(s/60)+"分"+pad2(s%60)+"秒";
+  EL.countdown.textContent=Math.floor(s/60)+"分"+pad2(s%60)+"秒";
   if(s<=0&&!busy)refresh();}}
 
 /* tab 切换 */
@@ -423,32 +438,34 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");document.getElementById("sec-"+b.dataset.tab).classList.add("active");
 });
-document.getElementById("kindBtn").onclick=()=>{CFG.industry=!CFG.industry;
-  document.getElementById("kindBtn").textContent="切换 "+(CFG.industry?"行业/概念":"概念/行业");
+EL.kindBtn.onclick=()=>{CFG.industry=!CFG.industry;
+  EL.kindBtn.textContent="切换 "+(CFG.industry?"行业/概念":"概念/行业");
   HISTORY.length=0;refresh();};
-document.getElementById("refreshBtn").onclick=()=>{if(!busy)refresh();};
+EL.refreshBtn.onclick=()=>{if(!busy)refresh();};
 
 /* 屏蔽板块：手动输入 / 点榜单✕ / 点 chip 取消，存本地、即时生效 */
 function renderBlocked(){
-  document.getElementById("blockChips").innerHTML=[...BLOCKED].sort().map(n=>
-    `<span class="chip">${n}<b data-un="${n}" title="取消屏蔽">✕</b></span>`).join("")
+  EL.blockChips.innerHTML=[...BLOCKED].sort().map(n=>
+    `<span class="chip">${esc(n)}<b data-un="${esc(n)}" title="取消屏蔽">✕</b></span>`).join("")
     || '<span class="empty" style="padding:0">未屏蔽任何板块</span>';
 }
 function addBlock(n){n=(n||"").trim();if(n&&!BLOCKED.has(n)){if(BLOCKED.size>=200)BLOCKED.delete([...BLOCKED][0]);BLOCKED.add(n);saveBlocked();renderBlocked();if(!busy)refresh();}}
 function unBlock(n){if(BLOCKED.delete(n)){saveBlocked();renderBlocked();if(!busy)refresh();}}
-document.getElementById("blockBtn").onclick=()=>{var i=document.getElementById("blockInput");addBlock(i.value);i.value="";};
-document.getElementById("blockInput").addEventListener("keydown",e=>{if(e.key==="Enter"){addBlock(e.target.value);e.target.value="";}});
-document.getElementById("lb").addEventListener("click",e=>{var b=e.target.closest(".b[data-n]");if(b)addBlock(b.dataset.n);});
-document.getElementById("blockChips").addEventListener("click",e=>{var b=e.target.closest("b[data-un]");if(b)unBlock(b.dataset.un);});
+EL.blockBtn.onclick=()=>{var i=EL.blockInput;addBlock(i.value);i.value="";};
+EL.blockInput.addEventListener("keydown",e=>{if(e.key==="Enter"){addBlock(e.target.value);e.target.value="";}});
+EL.lb.addEventListener("click",e=>{var b=e.target.closest(".b[data-n]");if(b)addBlock(b.dataset.n);});
+EL.blockChips.addEventListener("click",e=>{var b=e.target.closest("b[data-un]");if(b)unBlock(b.dataset.un);});
 renderBlocked();
 
-/* 悬停十字线 + 该时刻各板块数值/时间提示 */
+/* 悬停十字线 + 该时刻各板块数值/时间提示（rAF 节流，避免高频 mousemove 反复重排） */
 (function(){
-  var chartEl=document.getElementById("chart"),cross=document.getElementById("crosshair"),tip=document.getElementById("tooltip");
+  var chartEl=EL.chart,cross=EL.crosshair,tip=EL.tooltip;
+  var raf=0,lastE=null;
   function hide(){cross.style.display="none";tip.style.display="none";}
-  chartEl.addEventListener("mousemove",function(e){
+  function update(){
+    raf=0;var e=lastE;if(!e)return;
     if(!LASTCHART||!LASTCHART.series.length){hide();return;}
-    var svg=document.getElementById("chartsvg").querySelector("svg");if(!svg){hide();return;}
+    var svg=EL.chartsvg.querySelector("svg");if(!svg){hide();return;}
     var sr=svg.getBoundingClientRect(),cr=chartEl.getBoundingClientRect();
     var vbX=(e.clientX-sr.left)/sr.width*LASTCHART.W;
     var i=Math.round((vbX-LASTCHART.ML)/LASTCHART.pw*LASTCHART.nx);
@@ -459,16 +476,20 @@ renderBlocked();
     if(!rows.length){hide();return;}
     var chartX=(LASTCHART.ML+LASTCHART.pw*i/LASTCHART.nx)/LASTCHART.W*sr.width;
     cross.style.left=((sr.left-cr.left)+chartX)+"px";cross.style.display="block";
-    tip.innerHTML='<div class="t">'+t+'</div>'+rows.map(function(x){
-      return '<div class="row"><span class="nm"><span style="color:'+x.color+'">●</span> '+x.name+'</span><span>'+(x.v>=0?'+':'')+x.v.toFixed(1)+'亿</span></div>';
+    tip.innerHTML='<div class="t">'+esc(t)+'</div>'+rows.map(function(x){
+      return '<div class="row"><span class="nm"><span style="color:'+x.color+'">●</span> '+esc(x.name)+'</span><span>'+(x.v>=0?'+':'')+x.v.toFixed(1)+'亿</span></div>';
     }).join('');
     tip.style.display="block";
     var tx=(e.clientX-cr.left)+14,ty=(e.clientY-cr.top)+12;
     if(tx+tip.offsetWidth>cr.width)tx=Math.max(4,(e.clientX-cr.left)-tip.offsetWidth-14);
     if(ty+tip.offsetHeight>cr.height)ty=Math.max(4,cr.height-tip.offsetHeight-4);
     tip.style.left=tx+"px";tip.style.top=ty+"px";
+  }
+  chartEl.addEventListener("mousemove",function(e){
+    lastE=e;
+    if(!raf)raf=requestAnimationFrame(update);
   });
-  chartEl.addEventListener("mouseleave",hide);
+  chartEl.addEventListener("mouseleave",function(){lastE=null;hide();});
 })();
 
 /* Logo 资源在 assets/（logo.png 英雄区 + favicon.png 标签页），HTML 中静态引用 */
