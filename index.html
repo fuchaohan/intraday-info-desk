@@ -255,12 +255,16 @@ function jsonp(url){
   });
 }
 async function fetchAllSectors(industry){
-  const fs=industry?"m:90+t:2":"m:90+t:3";const merged={};
-  const pages=await Promise.all(Array.from({length:8},(_,i)=>{
-    const pn=i+1;
-    const url=`${CFG.host}/api/qt/clist/get?fid=f62&po=1&pz=100&pn=${pn}&np=1&fltt=2&invt=2&fs=${fs}&fields=f12,f14,f62`;
-    return jsonp(url).then(d=>(d.data&&d.data.diff)||[]).catch(()=>[]); /* 单页失败返回空，不中断整体 */
-  }));
+  const fs=industry?"m:90+t:2":"m:90+t:3";
+  const page=pn=>`${CFG.host}/api/qt/clist/get?fid=f62&po=1&pz=100&pn=${pn}&np=1&fltt=2&invt=2&fs=${fs}&fields=f12,f14,f62`;
+  /* 先取第 1 页拿 total，据此算精确页数，再并行拉剩余页——既快又不发空页请求 */
+  const first=await jsonp(page(1)).catch(()=>null);
+  const total=(first&&first.data&&first.data.total)||0;
+  const totalPages=Math.min(8,Math.max(1,Math.ceil(total/100)));
+  const pages=await Promise.all(Array.from({length:totalPages},(_,i)=>i===0
+    ? Promise.resolve((first&&first.data&&first.data.diff)||[])
+    : jsonp(page(i+1)).then(d=>(d.data&&d.data.diff)||[]).catch(()=>[])));
+  const merged={};
   for(const diff of pages){for(const x of diff){merged[x.f12]=[x.f12,x.f14,+x.f62];}}
   return Object.values(merged).sort((a,b)=>b[2]-a[2]);
 }
@@ -421,7 +425,7 @@ async function refresh(){
     EL.kindBadge.textContent=kind+"板块";
     EL.updated.textContent=now.toLocaleTimeString("zh-CN");
     EL.lastt.textContent=lastT;
-    EL.modTime.innerHTML=`更新 ${now.toLocaleTimeString("zh-CN")}<br>截至 ${lastT} · ${stxt}`;
+    EL.modTime.innerHTML=`更新 ${now.toLocaleTimeString("zh-CN")}<br>截至 ${esc(lastT)} · ${stxt}`;
     nextAt=Date.now()+CFG.intervalSec*1000;
   }catch(e){
     EL.status.textContent="❌ 抓取失败："+e.message+"（30 秒后自动重试）";
