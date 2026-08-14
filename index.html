@@ -105,8 +105,9 @@
  .two-col>*{min-width:0}
 
  .chart{width:100%;border:1px solid rgba(123,156,221,.18);border-radius:16px;position:relative;
-  background:linear-gradient(180deg,rgba(9,17,34,.82),rgba(8,15,29,.95));overflow:hidden;min-height:120px}
+  background:linear-gradient(180deg,rgba(9,17,34,.82),rgba(8,15,29,.95));min-height:120px}
  .chart svg{display:block;width:100%;height:auto}
+ .series-line,.series-label,.series-circle{transition:opacity .18s ease}
  #crosshair{position:absolute;top:0;bottom:0;width:1px;background:rgba(125,154,211,.55);pointer-events:none;display:none;z-index:2}
  .hover-box{position:absolute;pointer-events:none;display:none;z-index:3;min-width:150px;max-width:240px;
   padding:8px 10px;border-radius:10px;border:1px solid rgba(123,156,221,.28);
@@ -329,17 +330,18 @@ function renderSVG(seriesList,title){
   const n=seriesList.length,labels=[];
   seriesList.forEach((row,rank)=>{const [name,s,final]=row;const hue=215*(rank/Math.max(n-1,1));const color=hslHex(hue,0.7,0.6);
     const pts=s.filter(([t])=>t in xidx).map(([t,v])=>X(xidx[t]).toFixed(1)+","+Y(v).toFixed(1)).join(" ");if(!pts)return;
-    P.push('<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.7" stroke-linejoin="round" opacity="0.95"/>');
+    P.push('<polyline data-idx="'+rank+'" points="'+pts+'" fill="none" stroke="transparent" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" pointer-events="stroke"/>');
+    P.push('<polyline data-idx="'+rank+'" class="series-line" points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.7" stroke-linejoin="round" opacity="0.95"/>');
     const [lt,lv]=s[s.length-1],ex=X(xidx[lt]),ey=Y(lv);
-    P.push('<circle cx="'+ex.toFixed(1)+'" cy="'+ey.toFixed(1)+'" r="2.6" fill="'+color+'"/>');labels.push([ey,name,final,color]);});
+    P.push('<circle data-idx="'+rank+'" class="series-circle" cx="'+ex.toFixed(1)+'" cy="'+ey.toFixed(1)+'" r="2.6" fill="'+color+'"/>');labels.push([ey,name,final,color,rank]);});
   labels.sort((a,b)=>a[0]-b[0]);
   for(let i=1;i<labels.length;i++)if(labels[i][0]-labels[i-1][0]<14)labels[i][0]=labels[i-1][0]+14;
   /* 底部溢出时整体上移，但上移量受顶部空间限制，避免把标签顶进图标题区 */
   const overflow=labels.length?labels[labels.length-1][0]-(H-6):0;
   if(overflow>0){const topLimit=labels[0][0]-(MT+2);labels.forEach(r=>r[0]-=Math.min(overflow,topLimit));}
   const lx=ML+pw+10;
-  for(const [y,name,final,color] of labels)
-    P.push('<text x="'+lx+'" y="'+(y+4).toFixed(1)+'" font-size="12" fill="'+color+'">'+esc(name)+' '+(final>=0?"+":"")+final.toFixed(2)+'亿</text>');
+  for(const [y,name,final,color,rank] of labels)
+    P.push('<text data-idx="'+rank+'" class="series-label" x="'+lx+'" y="'+(y+4).toFixed(1)+'" font-size="12" fill="'+color+'">'+esc(name)+' '+(final>=0?"+":"")+final.toFixed(2)+'亿</text>');
   P.push('<text x="'+ML+'" y="18" font-size="13" fill="#dce8ff" font-weight="bold">'+esc(title)+'</text>');
   P.push("</svg>");
   // 暴露给悬停：时间轴 + 各序列在每个时刻的值 + 颜色 + 坐标映射参数
@@ -506,9 +508,19 @@ renderBlocked();
       return '<div class="row"><span class="nm"><span style="color:'+x.color+'">●</span> '+esc(x.name)+'</span><span>'+(x.v>=0?'+':'')+x.v.toFixed(1)+'亿</span></div>';
     }).join('');
     tip.style.display="block";
-    var tx=(e.clientX-cr.left)+14,ty=(e.clientY-cr.top)+12;
-    if(tx+tip.offsetWidth>cr.width)tx=Math.max(4,(e.clientX-cr.left)-tip.offsetWidth-14);
+    var ty=(e.clientY-cr.top)+12;
     if(ty+tip.offsetHeight>cr.height)ty=Math.max(4,cr.height-tip.offsetHeight-4);
+    var tx;
+    var nameLeft=LASTCHART.ML+LASTCHART.pw;      /* 绘图区右边界（viewBox） */
+    if(vbX<=nameLeft){
+      /* 绘图区：跟随鼠标，右侧放不下回退左侧 */
+      tx=(e.clientX-cr.left)+14;
+      if(tx+tip.offsetWidth>cr.width)tx=Math.max(4,(e.clientX-cr.left)-tip.offsetWidth-14);
+    }else{
+      /* 名称区：tooltip 固定在名称区左侧外（绘图区右边缘），不跟随鼠标左右移动 */
+      var nameLeftX=sr.left+(nameLeft/LASTCHART.W)*sr.width;
+      tx=Math.max(4,(nameLeftX-cr.left)-tip.offsetWidth-14);
+    }
     tip.style.left=tx+"px";tip.style.top=ty+"px";
   }
   chartEl.addEventListener("mousemove",function(e){
@@ -516,6 +528,26 @@ renderBlocked();
     if(!raf)raf=requestAnimationFrame(update);
   });
   chartEl.addEventListener("mouseleave",function(){lastE=null;hide();});
+
+  /* 曲线/名称悬停虚化：进入某系列时其余虚化，移出恢复（用容器委托，innerHTML 重绘也生效） */
+  function setHighlight(idx){
+    chartEl.querySelectorAll(".series-line,.series-circle,.series-label").forEach(function(el){
+      el.style.opacity = (el.getAttribute("data-idx")===String(idx)) ? "" : "0.15";
+    });
+  }
+  function clearHighlight(){
+    chartEl.querySelectorAll(".series-line,.series-circle,.series-label").forEach(function(el){
+      el.style.opacity = "";
+    });
+  }
+  chartEl.addEventListener("mouseover",function(e){
+    var t=e.target.closest?e.target.closest("[data-idx]"):null;
+    if(t)setHighlight(t.getAttribute("data-idx"));
+  });
+  chartEl.addEventListener("mouseout",function(e){
+    var t=e.target.closest?e.target.closest("[data-idx]"):null;
+    if(t)clearHighlight();
+  });
 })();
 
 /* Logo 资源在 assets/（logo.png 英雄区 + favicon.png 标签页），HTML 中静态引用 */
