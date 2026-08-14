@@ -140,6 +140,8 @@
   <div class="hero-side">
    <div class="global-status">
     <div>状态　<b id="status">加载中…</b></div>
+    <div>当前日期　<b id="curDate">—</b></div>
+    <div>数据日期　<b id="dataDate">—</b></div>
     <div>更新　<b id="updated">—</b>（截至 <span id="lastt">—</span>）</div>
     <div>下次刷新　<b id="countdown">—</b></div>
    </div>
@@ -270,11 +272,13 @@ async function fetchAllSectors(industry){
 }
 async function fetchIntraday(code){
   const url=`${CFG.host}/api/qt/stock/fflow/kline/get?lmt=0&klt=1&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65&secid=90.${code}`;
-  const d=await jsonp(url);const kl=(d.data&&d.data.klines)||[];const ser=[];
+  const d=await jsonp(url);const kl=(d.data&&d.data.klines)||[];const ser=[];let date=null;
   for(const ln of kl){const p=ln.split(",");if(p.length<2)continue;
-    const ts=p[0];const hhmm=ts.includes(" ")?ts.split(" ").pop().slice(0,5):ts.slice(0,5);
+    const ts=p[0];
+    if(!date&&ts.includes(" "))date=ts.split(" ")[0]; /* 数据交易日 = 时间戳的日期部分 */
+    const hhmm=ts.includes(" ")?ts.split(" ").pop().slice(0,5):ts.slice(0,5);
     const v=parseFloat(p[1]);if(!isNaN(v))ser.push([hhmm,v/1e8]);}
-  return ser;
+  return {date,ser};
 }
 function selectSectors(sectors,top){
   const real=sectors.filter(r=>accept(r[1]));
@@ -360,6 +364,7 @@ function statusText(d){if(!isTradingDay(d))return "⚪ 非交易日（最近收�
 const $ = id => document.getElementById(id);
 const EL = {
   status:$("status"), updated:$("updated"), lastt:$("lastt"), countdown:$("countdown"),
+  curDate:$("curDate"), dataDate:$("dataDate"),
   kindBadge:$("kindBadge"), chartsvg:$("chartsvg"), chart:$("chart"),
   crosshair:$("crosshair"), tooltip:$("tooltip"), lb:$("lb"),
   anomh:$("anomh"), anom:$("anom"),
@@ -381,8 +386,11 @@ async function refresh(){
     const curr={};let nin=0,nout=0;
     for(const [c,n,v] of sectors){if(accept(n)){const yi=v/1e8;curr[c]=[cleanName(n),yi];if(yi>=0)nin++;else nout++;}}
     const picked=selectSectors(sectors,CFG.top);
-    const got=await Promise.all(picked.map(([c,n])=>fetchIntraday(c).then(s=>[n,s]).catch(()=>[n,null])));
-    const seriesList=[];for(const [n,s] of got)if(s&&s.length)seriesList.push([n,s,s[s.length-1][1]]);
+    const got=await Promise.all(picked.map(([c,n])=>fetchIntraday(c).then(o=>[n,o]).catch(()=>[n,null])));
+    let dataDate=null;const seriesList=[];
+    for(const [n,o] of got){if(!o||!o.ser.length)continue;
+      if(!dataDate&&o.date)dataDate=o.date;
+      seriesList.push([n,o.ser,o.ser[o.ser.length-1][1]]);}
     seriesList.sort((a,b)=>b[2]-a[2]);
 
     const now=new Date();const kind=CFG.industry?"行业":"概念";
@@ -422,6 +430,8 @@ async function refresh(){
     // 头部时间/状态
     const stxt=statusText(now);
     EL.status.textContent=stxt;
+    EL.curDate.textContent=now.getFullYear()+"-"+pad2(now.getMonth()+1)+"-"+pad2(now.getDate());
+    EL.dataDate.textContent=dataDate||"—";
     EL.kindBadge.textContent=kind+"板块";
     EL.updated.textContent=now.toLocaleTimeString("zh-CN");
     EL.lastt.textContent=lastT;
