@@ -518,9 +518,18 @@ renderBlocked();
       tx=(e.clientX-cr.left)+14;
       if(tx+tip.offsetWidth>cr.width)tx=Math.max(4,(e.clientX-cr.left)-tip.offsetWidth-14);
     }else{
-      /* 名称区：tooltip 固定在名称区左侧外（绘图区右边缘），不跟随鼠标左右移动 */
-      var nameLeftX=sr.left+(nameLeft/LASTCHART.W)*sr.width;
-      tx=Math.max(4,(nameLeftX-cr.left)-tip.offsetWidth-14);
+      /* 名称区：tooltip 固定在名称区右侧外（取最右名称标签的右边界），水平不跟随、垂直跟随鼠标 */
+      var maxRight=0;
+      svg.querySelectorAll(".series-label").forEach(function(l){
+        var rr=l.getBoundingClientRect();
+        if(rr.right>maxRight)maxRight=rr.right;
+      });
+      tx=(maxRight-cr.left)+14;
+      /* 右侧放不下（窄屏）：回退到名称区左侧 */
+      if(cr.left+tx+tip.offsetWidth>window.innerWidth-6){
+        var nameLeftX=sr.left+(nameLeft/LASTCHART.W)*sr.width;
+        tx=Math.max(4,(nameLeftX-cr.left)-tip.offsetWidth-14);
+      }
     }
     tip.style.left=tx+"px";tip.style.top=ty+"px";
   }
