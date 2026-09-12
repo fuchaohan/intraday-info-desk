@@ -144,7 +144,7 @@
    <h1 class="hero-title"><img id="logoSlot" src="assets/logo.png" alt="盘中信息台" title="盘中信息台 · 板块资金流">盘中信息台</h1>
    <p>A 股盘中实时信息台。当前模块：跟踪各板块 / 概念的主力资金动向——当日累计净流入排行、分时累计曲线，并自动监测近 5 分钟的资金异动（急流入 / 急流出）。</p>
    <div class="hero-badge-row">
-    <span class="badge" id="kindBadge">概念板块</span>
+    <span class="badge" id="kindBadge">行业板块</span>
     <span class="badge">主力 = 超大单+大单净额</span>
     <span class="badge">每 5 分钟自刷新</span>
     <span class="badge">已剔风格/股价/业绩篮子</span>
@@ -160,7 +160,8 @@
    </div>
    <div class="btn-row">
     <button class="btn" id="refreshBtn">↻ 立即刷新</button>
-    <button class="btn secondary" id="kindBtn">切换 行业/概念</button>
+    <button class="btn" id="kindIndustryBtn" title="行业板块（申万二级口径）">行业</button>
+    <button class="btn secondary" id="kindConceptBtn" title="概念板块">概念</button>
    </div>
   </div>
  </header>
@@ -404,7 +405,7 @@ const EL = {
   cardOut:$("cardOut"), cardOutMeta:$("cardOutMeta"),
   cardAnom:$("cardAnom"), cardAnomMeta:$("cardAnomMeta"),
   cardBreadth:$("cardBreadth"), cardBreadthMeta:$("cardBreadthMeta"),
-  modTime:$("modTime"), kindBtn:$("kindBtn"), refreshBtn:$("refreshBtn"),
+  modTime:$("modTime"), kindIndustryBtn:$("kindIndustryBtn"), kindConceptBtn:$("kindConceptBtn"), refreshBtn:$("refreshBtn"),
   blockBtn:$("blockBtn"), blockInput:$("blockInput"), blockChips:$("blockChips"),
 };
 let nextAt=0,busy=false,pendingToggle=false;
@@ -465,7 +466,6 @@ async function refresh(){
     EL.status.textContent=stxt;
     EL.curDate.textContent=now.getFullYear()+"-"+pad2(now.getMonth()+1)+"-"+pad2(now.getDate());
     EL.dataDate.textContent=dataDate||"—";
-    EL.kindBadge.textContent=kind+"板块";
     EL.updated.textContent=now.toLocaleTimeString("zh-CN");
     EL.lastt.textContent=lastT;
     EL.modTime.innerHTML=`更新 ${now.toLocaleTimeString("zh-CN")}<br>截至 ${esc(lastT)} · ${stxt}`;
@@ -485,9 +485,15 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");document.getElementById("sec-"+b.dataset.tab).classList.add("active");
 });
-EL.kindBtn.onclick=()=>{CFG.industry=!CFG.industry;
-  EL.kindBtn.textContent="切换 "+(CFG.industry?"行业/概念":"概念/行业");
-  HISTORY.length=0;refresh();};
+/* 行业/概念：独立按钮点哪个切哪个（蓝色高亮=当前口径），点当前口径不重复刷新 */
+function setKindUI(){EL.kindIndustryBtn.classList.toggle("secondary",!CFG.industry);
+  EL.kindConceptBtn.classList.toggle("secondary",CFG.industry);
+  EL.kindBadge.textContent=(CFG.industry?"行业":"概念")+"板块";}
+function switchKind(industry){if(CFG.industry===industry)return;
+  CFG.industry=industry;HISTORY.length=0;setKindUI();refresh();}
+EL.kindIndustryBtn.onclick=()=>switchKind(true);
+EL.kindConceptBtn.onclick=()=>switchKind(false);
+setKindUI();
 EL.refreshBtn.onclick=()=>{if(!busy)refresh();};
 
 /* 屏蔽板块：手动输入 / 点榜单✕ / 点 chip 取消，存本地、即时生效 */
