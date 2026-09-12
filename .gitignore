@@ -1,0 +1,5 @@
+# 本地设计源文件（2.4MB），页面引用的是 assets/logo.png，无需入库
+logo-source.png
+
+# Mimosa hook 插件的工作产物（审查台账/hook 状态），与项目无关
+.mimosa/

@@ -251,10 +251,11 @@ let BLOCKED = new Set();
 try{ BLOCKED = new Set(JSON.parse(localStorage.getItem('sf_blocked')||'[]')); }catch(e){}
 function saveBlocked(){ try{ localStorage.setItem('sf_blocked',JSON.stringify([...BLOCKED])); }catch(e){} }
 
-/* 是否保留某板块：概念=剔篮子；行业=东财行业白名单；再剔掉用户手动屏蔽的 */
-const accept = n => (CFG.industry ? SW2.has(n) : !isBasket(n)) && !BLOCKED.has(cleanName(n));
 /* 显示名：行业去掉申万的 Ⅱ/Ⅲ 后缀，更接近 App 习惯 */
-const cleanName = n => CFG.industry ? n.replace(/[ⅡⅢ]+$/,"") : n;
+const cleanName = (n,industry=CFG.industry) => industry ? n.replace(/[ⅡⅢ]+$/,"") : n;
+/* 是否保留某板块：概念=剔篮子；行业=东财行业白名单；再剔掉用户手动屏蔽的。
+   industry 参数传口径快照：抓取途中用户切换行业/概念时，本轮仍按开始时的口径算完 */
+const accept = (n,industry=CFG.industry) => (industry ? SW2.has(n) : !isBasket(n)) && !BLOCKED.has(cleanName(n,industry));
 
 /* ============ JSONP 取数 ============ */
 let _ji=0;
@@ -262,7 +263,7 @@ function jsonp(url){
   return new Promise((resolve,reject)=>{
     const cb="__sfcb"+(++_ji)+"_"+Date.now();
     const s=document.createElement("script");let done=false;
-    const clean=()=>{try{delete window[cb];}catch(e){window[cb]=undefined;}s.remove();};
+    const clean=()=>{window[cb]=()=>{};s.remove();}; /* 置为空函数兜底：超时后迟到的响应脚本静默落空，不再报 ReferenceError */
     window[cb]=d=>{done=true;clean();resolve(d);};
     s.onerror=()=>{if(!done){clean();reject(new Error("网络/跨域失败"));}};
     s.src=url+(url.includes("?")?"&":"?")+"cb="+cb;
@@ -276,12 +277,14 @@ async function fetchAllSectors(industry){
   /* 先取第 1 页拿 total，据此算精确页数，再并行拉剩余页——既快又不发空页请求 */
   const first=await jsonp(page(1)).catch(()=>null);
   const total=(first&&first.data&&first.data.total)||0;
-  const totalPages=Math.min(8,Math.max(1,Math.ceil(total/100)));
+  if(!total)throw new Error("板块列表获取失败"); /* 首页失败/空响应直接走 30 秒重试，不渲染成「暂无数据」的假象 */
+  const totalPages=Math.min(8,Math.ceil(total/100));
   const pages=await Promise.all(Array.from({length:totalPages},(_,i)=>i===0
     ? Promise.resolve((first&&first.data&&first.data.diff)||[])
     : jsonp(page(i+1)).then(d=>(d.data&&d.data.diff)||[]).catch(()=>[])));
   const merged={};
-  for(const diff of pages){for(const x of diff){merged[x.f12]=[x.f12,x.f14,+x.f62];}}
+  /* f62 偶发为 "-"（无数据）：非有限值整行剔除，避免 NaN 打乱排序、广度统计与显示 */
+  for(const diff of pages){for(const x of diff){const v=+x.f62;if(Number.isFinite(v))merged[x.f12]=[x.f12,x.f14,v];}}
   return Object.values(merged).sort((a,b)=>b[2]-a[2]);
 }
 async function fetchIntraday(code){
@@ -294,10 +297,10 @@ async function fetchIntraday(code){
     const v=parseFloat(p[1]);if(!isNaN(v))ser.push([hhmm,v/1e8]);}
   return {date,ser};
 }
-function selectSectors(sectors,top){
-  const real=sectors.filter(r=>accept(r[1]));
+function selectSectors(sectors,top,industry=CFG.industry){
+  const real=sectors.filter(r=>accept(r[1],industry));
   const head=real.slice(0,top),tail=real.slice(-top);const seen=new Set(),out=[];
-  for(const r of head.concat(tail)){if(!seen.has(r[0])){seen.add(r[0]);out.push([r[0],cleanName(r[1])]);}}
+  for(const r of head.concat(tail)){if(!seen.has(r[0])){seen.add(r[0]);out.push([r[0],cleanName(r[1],industry)]);}}
   return out;
 }
 
@@ -307,11 +310,22 @@ function hslHex(h,s,l){const c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)
   else if(h<240){r=0;g=x;b=c;}else if(h<300){r=x;g=0;b=c;}else{r=c;g=0;b=x;}
   const H=v=>("0"+Math.round((v+m)*255).toString(16)).slice(-2);return "#"+H(r)+H(g)+H(b);}
 function niceStep(span,target=6){if(span<=0)return 1;const raw=span/target;
-  const mag=raw>=1?Math.pow(10,String(Math.floor(raw)).length-1):0.1;
+  /* log10 求量级：raw<1 时继续下探（0.05 之类的小跨度也能出网格），raw≥1 段与旧式位数算法等价 */
+  const mag=Math.pow(10,Math.floor(Math.log10(raw)));
   for(const mm of [1,2,2.5,5,10])if(raw<=mm*mag)return mm*mag;return 10*mag;}
 function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 function renderSVG(seriesList,title){
-  const W=1024,H=520,ML=58,MR=210,MT=30,MB=40,pw=W-ML-MR,ph=H-MT-MB;
+  const W=1024,H=520,ML=58,MT=30,MB=40;
+  /* 右侧标签区宽度按最长「名称+金额」自适应（汉字 12px、半角 6.6px 估算），超长名称不贴边；限 210~340 */
+  let MR=210;
+  for(const [name,,final] of seriesList){
+    let w=26; /* 结尾「亿」+ 起始偏移 10px + 余量 */
+    for(const ch of name)w+=ch.charCodeAt(0)>255?12:6.6;
+    w+=(String(final.toFixed(2)).length+1)*6.6; /* 金额含正负号 */
+    if(w>MR)MR=Math.ceil(w);
+  }
+  MR=Math.min(340,MR);
+  const pw=W-ML-MR,ph=H-MT-MB;
   const axis=[],seen=new Set();
   for(const [,s] of seriesList)for(const [t] of s)if(!seen.has(t)){seen.add(t);axis.push(t);}
   if(!axis.length){LASTCHART=null;return '<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="120" role="img" aria-label="暂无分时数据"><text x="20" y="60" fill="#90a7cf" font-family="Microsoft YaHei">暂无分时数据（非交易时段或数据未就绪）</text></svg>';}
@@ -323,7 +337,7 @@ function renderSVG(seriesList,title){
   const step=niceStep(vmax-vmin);let g=(Math.floor(vmin/step)-1)*step;
   while(g<=vmax){if(g>=vmin&&g<=vmax){const y=Y(g),zero=Math.abs(g)<1e-9;
     P.push('<line x1="'+ML+'" y1="'+y.toFixed(1)+'" x2="'+(ML+pw)+'" y2="'+y.toFixed(1)+'" stroke="'+(zero?'rgba(125,154,211,0.45)':'rgba(125,154,211,0.13)')+'" stroke-width="1"/>');
-    const lbl=zero?"0":(g>0?"+":"")+g.toFixed(1)+"亿";
+    const lbl=zero?"0":(g>0?"+":"")+g.toFixed(step<0.1?2:1)+"亿";
     P.push('<text x="'+(ML-6)+'" y="'+(y+4).toFixed(1)+'" font-size="11" fill="#7e93b8" text-anchor="end">'+lbl+'</text>');}g+=step;}
   axis.forEach((t,i)=>{const mm=t.split(":");if(mm.length===2&&["00","15","30","45"].includes(mm[1])){const x=X(i);
     P.push('<line x1="'+x.toFixed(1)+'" y1="'+MT+'" x2="'+x.toFixed(1)+'" y2="'+(MT+ph)+'" stroke="rgba(125,154,211,0.08)" stroke-width="1"/>');
@@ -365,6 +379,9 @@ function scanAnom(curr,prev,rank,floor){if(!prev)return [[],[]];const ds=[];
 
 /* ============ 状态 ============ */
 function pad2(n){return (n<10?"0":"")+n;}
+/* 统一换算成北京时间（UTC+8）再判断：时段/日期不随访问者所在时区漂移。
+   换算后的 Date 用本地时间方法（getHours/getDate/toLocaleTimeString）读出的即是北京墙钟 */
+function bjNow(){const d=new Date();return new Date(d.getTime()+(d.getTimezoneOffset()+480)*60000);}
 function isTradingDay(d){
   if(d.getFullYear()===TRADE_CAL.year)return TRADE_CAL.days.has(pad2(d.getMonth()+1)+pad2(d.getDate()));
   const day=d.getDay();return day!==0&&day!==6; /* 跨年兜底：周一至周五近似（节假日误差由更新日历消除） */
@@ -395,12 +412,13 @@ function fmt(v){return (v>=0?"+":"")+v.toFixed(1)+"亿";}
 async function refresh(){
   if(busy){pendingToggle=true;return;} /* 抓取进行中收到刷新请求：标记为待办，本轮结束后立即补一次 */
   busy=true;
+  const industry=CFG.industry; /* 口径快照：切换按钮可能在抓取途中翻转 CFG，本轮全程用同一口径 */
   EL.status.textContent="⏳ 抓取中…";
   try{
-    const sectors=await fetchAllSectors(CFG.industry);
+    const sectors=await fetchAllSectors(industry);
     const curr={};let nin=0,nout=0;
-    for(const [c,n,v] of sectors){if(accept(n)){const yi=v/1e8;curr[c]=[cleanName(n),yi];if(yi>=0)nin++;else nout++;}}
-    const picked=selectSectors(sectors,CFG.top);
+    for(const [c,n,v] of sectors){if(accept(n,industry)){const yi=v/1e8;curr[c]=[cleanName(n,industry),yi];if(yi>=0)nin++;else nout++;}}
+    const picked=selectSectors(sectors,CFG.top,industry);
     const got=await Promise.all(picked.map(([c,n])=>fetchIntraday(c).then(o=>[n,o]).catch(()=>[n,null])));
     let dataDate=null;const seriesList=[];
     for(const [n,o] of got){if(!o||!o.ser.length)continue;
@@ -408,7 +426,7 @@ async function refresh(){
       seriesList.push([n,o.ser,o.ser[o.ser.length-1][1]]);}
     seriesList.sort((a,b)=>b[2]-a[2]);
 
-    const now=new Date();const kind=CFG.industry?"行业":"概念";
+    const now=bjNow();const kind=industry?"行业":"概念";
     const lastT=seriesList.length?seriesList[0][1][seriesList[0][1].length-1][0]:"—";
     EL.chartsvg.innerHTML=renderSVG(seriesList,kind+"板块 主力资金净流入（累计·亿元）  截至 "+lastT);
 
@@ -478,8 +496,9 @@ function renderBlocked(){
     `<span class="chip">${esc(n)}<b data-un="${esc(n)}" title="取消屏蔽">✕</b></span>`).join("")
     || '<span class="empty" style="padding:0">未屏蔽任何板块</span>';
 }
-function addBlock(n){n=(n||"").trim();if(n&&!BLOCKED.has(n)){if(BLOCKED.size>=200)BLOCKED.delete([...BLOCKED][0]);BLOCKED.add(n);saveBlocked();renderBlocked();if(!busy)refresh();}}
-function unBlock(n){if(BLOCKED.delete(n)){saveBlocked();renderBlocked();if(!busy)refresh();}}
+/* refresh() 自带重入保护：busy 时自动置 pendingToggle，本轮抓完立即补跑，屏蔽/取消即时生效 */
+function addBlock(n){n=(n||"").trim();if(n&&!BLOCKED.has(n)){if(BLOCKED.size>=200)BLOCKED.delete([...BLOCKED][0]);BLOCKED.add(n);saveBlocked();renderBlocked();refresh();}}
+function unBlock(n){if(BLOCKED.delete(n)){saveBlocked();renderBlocked();refresh();}}
 EL.blockBtn.onclick=()=>{var i=EL.blockInput;addBlock(i.value);i.value="";};
 EL.blockInput.addEventListener("keydown",e=>{if(e.key==="Enter"){addBlock(e.target.value);e.target.value="";}});
 EL.lb.addEventListener("click",e=>{var b=e.target.closest(".b[data-n]");if(b)addBlock(b.dataset.n);});
