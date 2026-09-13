@@ -27,15 +27,15 @@
  }
  .app{max-width:1320px;margin:0 auto;padding:14px 12px 30px;position:relative;z-index:1}
 
- /* hero：NGA 式浅色版面头；浅色主题用深字 logo-light.png，深色主题用白字 logo.png，applyTheme 切换 src */
+ /* hero：NGA 式浅色版面头；浅色主题用深字 logo-light.png，深色主题用白字 logo.png，applyTheme 切换 src；
+    两张 logo 同为 1030x320 同构图裁剪，CSS 同一高度即可保证两主题渲染尺寸一致 */
  .hero{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;
   padding:12px 16px;margin-bottom:12px;border:1px solid var(--line);border-radius:var(--radius);
   background:linear-gradient(180deg,#fdfcf6,#f4f1e3);flex-wrap:wrap}
  .hero h1{margin:0;font-size:22px;letter-spacing:.02em;line-height:1.1;color:#16233c}
  .hero-title{display:flex;align-items:center;gap:12px;min-width:0}
  .hero-title svg,.hero-title img{width:auto;height:48px;max-width:230px;flex:none;object-fit:contain;display:block}
- .hero-title img{filter:none;border-radius:4px}
- body:not(.dark) .hero-title img{height:52px}
+ .hero-title img{filter:none}
  /* 主题切换按钮：跟在标题后的小尺寸版（h1 是 flex，靠既有 gap 与标题隔开） */
  .hero-title .btn{font-size:12px;padding:2px 10px;flex:none}
  @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.35}}
