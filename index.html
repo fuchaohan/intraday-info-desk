@@ -199,7 +199,7 @@
     <button class="btn" id="refreshBtn">↻ 立即刷新</button>
     <button class="btn" id="kindIndustryBtn" title="行业板块（申万二级口径）">行业</button>
     <button class="btn secondary" id="kindConceptBtn" title="概念板块">概念</button>
-    <button class="btn secondary" id="kindBroadBtn" title="宽基指数主力资金流（上证50 / 沪深300 / 中证500 / 中证1000 / 中证2000 / 科创50 / 创业板指 / 深证成指 / 北证50）">宽基</button>
+    <button class="btn secondary" id="kindBroadBtn" title="宽基指数主力资金流（上证50 / 沪深300 / 中证500 / 中证1000 / 中证2000 / 科创50 / 创业板指）">宽基</button>
    </div>
   </div>
  </header>
@@ -292,7 +292,7 @@ function saveBlocked(){ try{ localStorage.setItem('sf_blocked',JSON.stringify([.
 
 /* 宽基指数固定名单：[完整 secid, 显示名]。走与板块相同的指数主力资金流分钟线（secid=市场.代码），
    不经 clist 排行榜 / 白名单 / 屏蔽逻辑；中证2000 为中证自编指数，东财市场号是 2 */
-const BROAD=[["1.000016","上证50"],["1.000300","沪深300"],["1.000905","中证500"],["1.000852","中证1000"],["2.932000","中证2000"],["1.000688","科创50"],["0.399006","创业板指"],["0.399001","深证成指"],["0.899050","北证50"]];
+const BROAD=[["1.000016","上证50"],["1.000300","沪深300"],["1.000905","中证500"],["1.000852","中证1000"],["2.932000","中证2000"],["1.000688","科创50"],["0.399006","创业板指"]];
 
 /* 显示名：行业去掉申万的 Ⅱ/Ⅲ 后缀，更接近 App 习惯 */
 const cleanName = (n,industry=CFG.kind==="industry") => industry ? n.replace(/[ⅡⅢ]+$/,"") : n;
