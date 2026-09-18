@@ -69,16 +69,7 @@
   .badge{font-size:11px;padding:1px 6px}
  }
 
- /* tabs（加新功能就在这加一个 tab-btn + 一个 section）：NGA 浅色导航条，项间竖线，active 白底+深蓝底边 */
- .tabs{display:flex;gap:0;flex-wrap:wrap;margin-bottom:12px;background:var(--bg-soft);
-  border:1px solid var(--line);border-radius:var(--radius)}
- .tab-btn{flex:none;text-align:left;padding:7px 16px;background:none;border:0;border-radius:0;color:var(--muted);
-  cursor:pointer;transition:none;font:inherit;font-size:13px}
- .tab-btn:not(:first-child){border-left:1px solid #d5d0bd}
- .tab-btn strong{display:inline;color:var(--text);margin:0 6px 0 0;font-size:13px}
- .tab-btn:hover{background:rgba(255,255,255,.6)}
- .tab-btn.active{background:#fff;color:var(--muted);box-shadow:inset 0 -2px 0 var(--blue)}
- .tab-btn.active strong{color:#16233c}
+ /* tabs 导航条已移除（当前只有一个模块，tab 纯冗余）；.section 显隐规则保留，新模块直接写 <section class="section active"> */
  .section{display:none}.section.active{display:block}
 
  /* module */
@@ -155,10 +146,6 @@
  body.dark .btn:active{background:#24324a}
  body.dark .btn.secondary{background:#1b2537;color:#8fa0bd;border-color:#3d4d68;box-shadow:none}
  body.dark .btn.secondary:hover{background:#223050;color:#b9c8e2}
- body.dark .tab-btn:not(:first-child){border-left-color:#2b3850}
- body.dark .tab-btn:hover{background:rgba(255,255,255,.05)}
- body.dark .tab-btn.active{background:#131c2e;box-shadow:inset 0 -2px 0 var(--blue)}
- body.dark .tab-btn.active strong{color:#dce8ff}
  body.dark .module-title h2{color:#dce8ff}
  body.dark .timestamp{color:#8fa0bd}
  body.dark .panel h3{color:#dce8ff}
@@ -203,11 +190,6 @@
    </div>
   </div>
  </header>
-
- <!-- 加新功能：复制一个 tab-btn（data-tab=xxx）+ 一个 <section id="sec-xxx"> 即可 -->
- <nav class="tabs">
-  <button class="tab-btn active" data-tab="flow"><strong>板块资金流</strong>主力净流入累计曲线 + 异动监测</button>
- </nav>
 
  <!-- ============ 模块一：板块资金流 ============ -->
  <section class="section active" id="sec-flow">
@@ -541,11 +523,6 @@ function tick(){if(nextAt){let s=Math.max(0,Math.round((nextAt-Date.now())/1000)
   if(s<=0&&!busy)refresh();}}
 
 /* tab 切换 */
-document.querySelectorAll(".tab-btn").forEach(b=>b.onclick=()=>{
-  document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
-  document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));
-  b.classList.add("active");document.getElementById("sec-"+b.dataset.tab).classList.add("active");
-});
 /* 行业/概念/宽基：独立按钮点哪个切哪个（蓝色高亮=当前口径），点当前口径不重复刷新 */
 function setKindUI(){const k=CFG.kind;
   EL.kindIndustryBtn.classList.toggle("secondary",k!=="industry");
