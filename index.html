@@ -179,7 +179,7 @@
  <header class="hero">
   <div>
    <h1 class="hero-title"><img id="logoSlot" src="assets/logo.png" alt="盘中信息台" title="盘中信息台 · 板块资金流">盘中信息台<button class="btn" id="themeBtn" title="切换深色 / 浅色模式">🌙 深色</button></h1>
-   <p>A 股盘中实时信息台。当前模块：跟踪各板块 / 概念的主力资金动向——当日累计净流入排行、分时累计曲线，并自动监测近 5 分钟的资金异动（急流入 / 急流出）。</p>
+   <p>A 股盘中实时信息台。当前模块：跟踪行业板块 / 概念 / 宽基指数的主力资金动向——当日累计净流入排行、分时累计曲线，并自动监测近 5 分钟的资金异动（急流入 / 急流出）。</p>
    <div class="hero-badge-row">
     <span class="badge" id="kindBadge">行业板块</span>
     <span class="badge">主力 = 超大单+大单净额</span>
@@ -199,6 +199,7 @@
     <button class="btn" id="refreshBtn">↻ 立即刷新</button>
     <button class="btn" id="kindIndustryBtn" title="行业板块（申万二级口径）">行业</button>
     <button class="btn secondary" id="kindConceptBtn" title="概念板块">概念</button>
+    <button class="btn secondary" id="kindBroadBtn" title="宽基指数主力资金流（上证50 / 沪深300 / 中证500 / 中证1000 / 中证2000 / 科创50 / 创业板指 / 深证成指 / 北证50）">宽基</button>
    </div>
   </div>
  </header>
@@ -260,7 +261,7 @@
 <script>
 /* ============ 配置 ============ */
 const CFG = {
-  industry:true, top:8, intervalSec:300,
+  kind:"industry", top:8, intervalSec:300, /* kind: industry=行业 / concept=概念 / broad=宽基指数 */
   anomalyWin:5, anomalyRank:3, anomalyFloor:2.0,
   host:"https://push2delay.eastmoney.com",
 };
@@ -289,11 +290,15 @@ let BLOCKED = new Set();
 try{ BLOCKED = new Set(JSON.parse(localStorage.getItem('sf_blocked')||'[]')); }catch(e){}
 function saveBlocked(){ try{ localStorage.setItem('sf_blocked',JSON.stringify([...BLOCKED])); }catch(e){} }
 
+/* 宽基指数固定名单：[完整 secid, 显示名]。走与板块相同的指数主力资金流分钟线（secid=市场.代码），
+   不经 clist 排行榜 / 白名单 / 屏蔽逻辑；中证2000 为中证自编指数，东财市场号是 2 */
+const BROAD=[["1.000016","上证50"],["1.000300","沪深300"],["1.000905","中证500"],["1.000852","中证1000"],["2.932000","中证2000"],["1.000688","科创50"],["0.399006","创业板指"],["0.399001","深证成指"],["0.899050","北证50"]];
+
 /* 显示名：行业去掉申万的 Ⅱ/Ⅲ 后缀，更接近 App 习惯 */
-const cleanName = (n,industry=CFG.industry) => industry ? n.replace(/[ⅡⅢ]+$/,"") : n;
+const cleanName = (n,industry=CFG.kind==="industry") => industry ? n.replace(/[ⅡⅢ]+$/,"") : n;
 /* 是否保留某板块：概念=剔篮子；行业=东财行业白名单；再剔掉用户手动屏蔽的。
-   industry 参数传口径快照：抓取途中用户切换行业/概念时，本轮仍按开始时的口径算完 */
-const accept = (n,industry=CFG.industry) => (industry ? SW2.has(n) : !isBasket(n)) && !BLOCKED.has(cleanName(n,industry));
+   industry 参数传口径快照：抓取途中用户切换口径时，本轮仍按开始时的口径算完 */
+const accept = (n,industry=CFG.kind==="industry") => (industry ? SW2.has(n) : !isBasket(n)) && !BLOCKED.has(cleanName(n,industry));
 
 /* ============ JSONP 取数 ============ */
 let _ji=0;
@@ -326,7 +331,9 @@ async function fetchAllSectors(industry){
   return Object.values(merged).sort((a,b)=>b[2]-a[2]);
 }
 async function fetchIntraday(code){
-  const url=`${CFG.host}/api/qt/stock/fflow/kline/get?lmt=0&klt=1&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65&secid=90.${code}`;
+  /* 板块代码为纯数字→自动补板块市场前缀 90.；宽基传完整 secid（如 1.000300）原样使用 */
+  const secid=String(code).includes(".")?code:"90."+code;
+  const url=`${CFG.host}/api/qt/stock/fflow/kline/get?lmt=0&klt=1&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65&secid=${secid}`;
   const d=await jsonp(url);const kl=(d.data&&d.data.klines)||[];const ser=[];let date=null;
   for(const ln of kl){const p=ln.split(",");if(p.length<2)continue;
     const ts=p[0];
@@ -335,7 +342,7 @@ async function fetchIntraday(code){
     const v=parseFloat(p[1]);if(!isNaN(v))ser.push([hhmm,v/1e8]);}
   return {date,ser};
 }
-function selectSectors(sectors,top,industry=CFG.industry){
+function selectSectors(sectors,top,industry=CFG.kind==="industry"){
   const real=sectors.filter(r=>accept(r[1],industry));
   const head=real.slice(0,top),tail=real.slice(-top);const seen=new Set(),out=[];
   for(const r of head.concat(tail)){if(!seen.has(r[0])){seen.add(r[0]);out.push([r[0],cleanName(r[1],industry)]);}}
@@ -452,7 +459,7 @@ const EL = {
   cardOut:$("cardOut"), cardOutMeta:$("cardOutMeta"),
   cardAnom:$("cardAnom"), cardAnomMeta:$("cardAnomMeta"),
   cardBreadth:$("cardBreadth"), cardBreadthMeta:$("cardBreadthMeta"),
-  modTime:$("modTime"), logoSlot:$("logoSlot"), kindIndustryBtn:$("kindIndustryBtn"), kindConceptBtn:$("kindConceptBtn"), themeBtn:$("themeBtn"), refreshBtn:$("refreshBtn"),
+  modTime:$("modTime"), logoSlot:$("logoSlot"), kindIndustryBtn:$("kindIndustryBtn"), kindConceptBtn:$("kindConceptBtn"), kindBroadBtn:$("kindBroadBtn"), themeBtn:$("themeBtn"), refreshBtn:$("refreshBtn"),
   blockBtn:$("blockBtn"), blockInput:$("blockInput"), blockChips:$("blockChips"),
 };
 let nextAt=0,busy=false,pendingToggle=false;
@@ -460,30 +467,36 @@ function fmt(v){return (v>=0?"+":"")+v.toFixed(1)+"亿";}
 async function refresh(){
   if(busy){pendingToggle=true;return;} /* 抓取进行中收到刷新请求：标记为待办，本轮结束后立即补一次 */
   busy=true;
-  const industry=CFG.industry; /* 口径快照：切换按钮可能在抓取途中翻转 CFG，本轮全程用同一口径 */
+  const kind=CFG.kind,industry=kind==="industry"; /* 口径快照：切换按钮可能在抓取途中翻转 CFG，本轮全程用同一口径 */
   EL.status.textContent="⏳ 抓取中…";
   try{
-    const sectors=await fetchAllSectors(industry);
-    const curr={};let nin=0,nout=0;
-    for(const [c,n,v] of sectors){if(accept(n,industry)){const yi=v/1e8;curr[c]=[cleanName(n,industry),yi];if(yi>=0)nin++;else nout++;}}
-    const picked=selectSectors(sectors,CFG.top,industry);
+    const curr={};let nin=0,nout=0,picked;
+    if(kind==="broad"){ /* 宽基：固定指数名单直接抓，不经 clist 榜与白名单/篮子过滤 */
+      picked=BROAD;
+    }else{
+      const sectors=await fetchAllSectors(industry);
+      for(const [c,n,v] of sectors){if(accept(n,industry)){const yi=v/1e8;curr[c]=[cleanName(n,industry),yi];if(yi>=0)nin++;else nout++;}}
+      picked=selectSectors(sectors,CFG.top,industry);
+    }
     const got=await Promise.all(picked.map(([c,n])=>fetchIntraday(c).then(o=>[n,o]).catch(()=>[n,null])));
     let dataDate=null;const seriesList=[];
     for(const [n,o] of got){if(!o||!o.ser.length)continue;
       if(!dataDate&&o.date)dataDate=o.date;
-      seriesList.push([n,o.ser,o.ser[o.ser.length-1][1]]);}
+      const v=o.ser[o.ser.length-1][1];seriesList.push([n,o.ser,v]);
+      if(kind==="broad"){curr[n]=[n,v];if(v>=0)nin++;else nout++;}} /* 宽基的广度/异动快照在拿到分钟线后才能建 */
     seriesList.sort((a,b)=>b[2]-a[2]);
 
-    const now=bjNow();const kind=industry?"行业":"概念";
+    const now=bjNow();const kindTxt=kind==="broad"?"宽基指数":(industry?"行业":"概念")+"板块";
     const lastT=seriesList.length?seriesList[0][1][seriesList[0][1].length-1][0]:"—";
-    LASTDATA={list:seriesList,title:kind+"板块 主力资金净流入（累计·亿元）  截至 "+lastT};
+    LASTDATA={list:seriesList,title:kindTxt+" 主力资金净流入（累计·亿元）  截至 "+lastT};
     EL.chartsvg.innerHTML=renderSVG(LASTDATA.list,LASTDATA.title);
 
     // 榜单
     const lin=seriesList.filter(r=>r[2]>=0).slice(0,CFG.top);
     const lout=seriesList.filter(r=>r[2]<0).slice(-CFG.top).reverse();
-    let h="";lin.forEach(r=>h+=`<tr><td class="in">▲ ${esc(r[0])}</td><td class="v in">${fmt(r[2])}</td><td class="x"><span class="b" data-n="${esc(r[0])}" title="屏蔽此板块">✕</span></td></tr>`);
-    lout.forEach(r=>h+=`<tr><td class="out">▼ ${esc(r[0])}</td><td class="v out">${fmt(r[2])}</td><td class="x"><span class="b" data-n="${esc(r[0])}" title="屏蔽此板块">✕</span></td></tr>`);
+    const xcell=r=>kind==="broad"?"":`<td class="x"><span class="b" data-n="${esc(r[0])}" title="屏蔽此板块">✕</span></td>`; /* 宽基是固定名单，屏蔽无意义 */
+    let h="";lin.forEach(r=>h+=`<tr><td class="in">▲ ${esc(r[0])}</td><td class="v in">${fmt(r[2])}</td>${xcell(r)}</tr>`);
+    lout.forEach(r=>h+=`<tr><td class="out">▼ ${esc(r[0])}</td><td class="v out">${fmt(r[2])}</td>${xcell(r)}</tr>`);
     EL.lb.innerHTML=h||'<tr><td class="empty">暂无</td></tr>';
 
     // 异动
@@ -507,7 +520,7 @@ async function refresh(){
     EL.cardAnom.textContent=(ain.length+aout.length)+" 个";
     EL.cardAnomMeta.textContent=tradingNow(now)?`急流入 ${ain.length} · 急流出 ${aout.length}`:"盘中才计";
     EL.cardBreadth.textContent=nin+" / "+nout;
-    EL.cardBreadthMeta.textContent=`净流入 ${nin} · 净流出 ${nout}（共 ${nin+nout} 板块）`;
+    EL.cardBreadthMeta.textContent=`净流入 ${nin} · 净流出 ${nout}（共 ${nin+nout} ${kind==="broad"?"指数":"板块"}）`;
 
     // 头部时间/状态
     const stxt=statusText(now);
@@ -533,14 +546,17 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".section").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");document.getElementById("sec-"+b.dataset.tab).classList.add("active");
 });
-/* 行业/概念：独立按钮点哪个切哪个（蓝色高亮=当前口径），点当前口径不重复刷新 */
-function setKindUI(){EL.kindIndustryBtn.classList.toggle("secondary",!CFG.industry);
-  EL.kindConceptBtn.classList.toggle("secondary",CFG.industry);
-  EL.kindBadge.textContent=(CFG.industry?"行业":"概念")+"板块";}
-function switchKind(industry){if(CFG.industry===industry)return;
-  CFG.industry=industry;HISTORY.length=0;setKindUI();refresh();}
-EL.kindIndustryBtn.onclick=()=>switchKind(true);
-EL.kindConceptBtn.onclick=()=>switchKind(false);
+/* 行业/概念/宽基：独立按钮点哪个切哪个（蓝色高亮=当前口径），点当前口径不重复刷新 */
+function setKindUI(){const k=CFG.kind;
+  EL.kindIndustryBtn.classList.toggle("secondary",k!=="industry");
+  EL.kindConceptBtn.classList.toggle("secondary",k!=="concept");
+  EL.kindBroadBtn.classList.toggle("secondary",k!=="broad");
+  EL.kindBadge.textContent=k==="industry"?"行业板块":k==="concept"?"概念板块":"宽基指数";}
+function switchKind(k){if(CFG.kind===k)return;
+  CFG.kind=k;HISTORY.length=0;setKindUI();refresh();}
+EL.kindIndustryBtn.onclick=()=>switchKind("industry");
+EL.kindConceptBtn.onclick=()=>switchKind("concept");
+EL.kindBroadBtn.onclick=()=>switchKind("broad");
 setKindUI();
 
 /* 深色模式：记忆到 localStorage，首次访问跟随系统 prefers-color-scheme */
