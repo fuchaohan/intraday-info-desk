@@ -383,7 +383,9 @@ function renderSVG(seriesList,title){
     P.push('<text x="'+(ML-6)+'" y="'+(y+4).toFixed(1)+'" font-size="11" fill="'+C.axis+'" text-anchor="end">'+lbl+'</text>');}g+=step;}
   axis.forEach((t,i)=>{const mm=t.split(":");if(mm.length===2&&["00","15","30","45"].includes(mm[1])){const x=X(i);
     P.push('<line x1="'+x.toFixed(1)+'" y1="'+MT+'" x2="'+x.toFixed(1)+'" y2="'+(MT+ph)+'" stroke="'+C.xgrid+'" stroke-width="1"/>');
-    P.push('<text x="'+x.toFixed(1)+'" y="'+(MT+ph+16)+'" font-size="11" fill="'+C.axis+'" text-anchor="middle">'+t+'</text>');}});
+    /* 末位刻度（15:00）右对齐收进图内：居中锚点会伸进右侧标签列，与贴底 series-label 重叠 */
+    const lastTick=i===nx;
+    P.push('<text x="'+(lastTick?x+3:x).toFixed(1)+'" y="'+(MT+ph+16)+'" font-size="11" fill="'+C.axis+'" text-anchor="'+(lastTick?"end":"middle")+'">'+t+'</text>');}});
   const n=seriesList.length,labels=[];
   seriesList.forEach((row,rank)=>{const [name,s,final]=row;const hue=215*(rank/Math.max(n-1,1));const color=C.hsl(hue);
     const pts=s.filter(([t])=>t in xidx).map(([t,v])=>X(xidx[t]).toFixed(1)+","+Y(v).toFixed(1)).join(" ");if(!pts)return;
