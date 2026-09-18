@@ -36,8 +36,8 @@
  .hero-title{display:flex;align-items:center;gap:12px;min-width:0}
  .hero-title svg,.hero-title img{width:auto;height:48px;max-width:230px;flex:none;object-fit:contain;display:block}
  .hero-title img{filter:none}
- /* 底部操作行：主题切换居左、口径按钮组居右；flex-basis:100% 使其在 hero 里独占换行后的一行 */
- .hero-actions{flex-basis:100%;display:flex;justify-content:space-between;align-items:center;gap:8px}
+ /* 操作行：hero 卡片下方的独立块——主题切换居左、口径按钮组居右 */
+ .hero-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
  @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.35}}
  .logo-live{animation:livePulse 1.8s ease-in-out infinite}
  .hero p{margin:8px 0 0;color:var(--muted);line-height:1.6;max-width:760px;font-size:12px}
@@ -184,15 +184,15 @@
     <div class="status-row"><span>下次刷新　<b id="countdown">—</b></span><button class="btn" id="refreshBtn" title="立即抓取一轮">↻ 立即刷新</button></div>
    </div>
   </div>
-  <div class="hero-actions">
-   <button class="btn" id="themeBtn" title="切换深色 / 浅色模式">🌙 深色</button>
-   <div class="btn-row">
-    <button class="btn" id="kindIndustryBtn" title="行业板块（申万二级口径）">行业</button>
-    <button class="btn secondary" id="kindConceptBtn" title="概念板块">概念</button>
-    <button class="btn secondary" id="kindBroadBtn" title="宽基指数主力资金流（上证50 / 沪深300 / 中证500 / 中证1000 / 中证2000 / 科创50 / 创业板指 / 北证50）">宽基</button>
-   </div>
-  </div>
  </header>
+ <div class="hero-actions">
+  <button class="btn" id="themeBtn" title="切换深色 / 浅色模式">🌙 深色</button>
+  <div class="btn-row">
+   <button class="btn" id="kindIndustryBtn" title="行业板块（申万二级口径）">行业</button>
+   <button class="btn secondary" id="kindConceptBtn" title="概念板块">概念</button>
+   <button class="btn secondary" id="kindBroadBtn" title="宽基指数主力资金流（上证50 / 沪深300 / 中证500 / 中证1000 / 中证2000 / 科创50 / 创业板指 / 北证50）">宽基</button>
+  </div>
+ </div>
 
  <!-- ============ 模块一：板块资金流 ============ -->
  <section class="section active" id="sec-flow">
