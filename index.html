@@ -49,6 +49,9 @@
  .global-status{padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);
   background:#fff;color:#44443a;font-size:12px;line-height:1.7}
  .global-status b{color:#16233c}
+ /* 「下次刷新」行：文案居左、立即刷新按钮居右 */
+ .global-status .status-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+ .global-status .status-row .btn{font-size:11px;padding:1px 8px;font-weight:400}
  .btn-row{display:flex;flex-wrap:wrap;gap:8px}
  /* 按钮：NGA 式灰色立体小按钮；主按钮（当前口径）加粗+微凹，secondary 平灰弱化 */
  .btn{border:1px solid #8f8f8f;border-radius:var(--radius);padding:3px 12px;color:#222;cursor:pointer;font:inherit;font-size:13px;
@@ -180,10 +183,9 @@
     <div>当前日期　<b id="curDate">—</b></div>
     <div>数据日期　<b id="dataDate">—</b></div>
     <div>更新　<b id="updated">—</b>（截至 <span id="lastt">—</span>）</div>
-    <div>下次刷新　<b id="countdown">—</b></div>
+    <div class="status-row"><span>下次刷新　<b id="countdown">—</b></span><button class="btn" id="refreshBtn" title="立即抓取一轮">↻ 立即刷新</button></div>
    </div>
    <div class="btn-row">
-    <button class="btn" id="refreshBtn">↻ 立即刷新</button>
     <button class="btn" id="kindIndustryBtn" title="行业板块（申万二级口径）">行业</button>
     <button class="btn secondary" id="kindConceptBtn" title="概念板块">概念</button>
     <button class="btn secondary" id="kindBroadBtn" title="宽基指数主力资金流（上证50 / 沪深300 / 中证500 / 中证1000 / 中证2000 / 科创50 / 创业板指 / 北证50）">宽基</button>
