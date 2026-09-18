@@ -392,10 +392,14 @@ function renderSVG(seriesList,title){
     const [lt,lv]=s[s.length-1],ex=X(xidx[lt]),ey=Y(lv);
     P.push('<circle data-idx="'+rank+'" class="series-circle" cx="'+ex.toFixed(1)+'" cy="'+ey.toFixed(1)+'" r="2.6" fill="'+color+'"/>');labels.push([ey,name,final,color,rank]);});
   labels.sort((a,b)=>a[0]-b[0]);
-  for(let i=1;i<labels.length;i++)if(labels[i][0]-labels[i-1][0]<14)labels[i][0]=labels[i-1][0]+14;
-  /* 底部溢出时整体上移，但上移量受顶部空间限制，避免把标签顶进图标题区 */
-  const overflow=labels.length?labels[labels.length-1][0]-(H-6):0;
-  if(overflow>0){const topLimit=labels[0][0]-(MT+2);labels.forEach(r=>r[0]-=Math.min(overflow,topLimit));}
+  /* 防重叠布局：默认 14px 行距自上而下推开；链长超出绘图区高度时压缩行距（最低 5px），
+     再整体回收到 [MT+6, H-8] 区间，保证首尾标签都不被 viewBox 裁掉（旧逻辑上移量受顶部空间限制，压不住长链） */
+  const yTop=MT+6,yBot=H-8;
+  const chainSpan=g=>{let prev=0;for(let i=1;i<labels.length;i++)prev=Math.max(labels[i][0]-labels[0][0],prev+g);return prev;};
+  let gap=14;while(gap>5&&chainSpan(gap)>yBot-yTop)gap--;
+  for(let i=1;i<labels.length;i++)if(labels[i][0]-labels[i-1][0]<gap)labels[i][0]=labels[i-1][0]+gap;
+  const over=labels[labels.length-1][0]-yBot;
+  if(over>0)labels.forEach(r=>r[0]-=over);
   const lx=ML+pw+10;
   for(const [y,name,final,color,rank] of labels)
     P.push('<text data-idx="'+rank+'" class="series-label" x="'+lx+'" y="'+(y+4).toFixed(1)+'" font-size="12" fill="'+color+'">'+esc(name)+' '+(final>=0?"+":"")+final.toFixed(2)+'亿</text>');
