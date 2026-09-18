@@ -36,8 +36,8 @@
  .hero-title{display:flex;align-items:center;gap:12px;min-width:0}
  .hero-title svg,.hero-title img{width:auto;height:48px;max-width:230px;flex:none;object-fit:contain;display:block}
  .hero-title img{filter:none}
- /* 主题切换按钮：跟在标题后的小尺寸版（h1 是 flex，靠既有 gap 与标题隔开） */
- .hero-title .btn{font-size:12px;padding:2px 10px;flex:none}
+ /* 底部操作行：主题切换居左、口径按钮组居右；flex-basis:100% 使其在 hero 里独占换行后的一行 */
+ .hero-actions{flex-basis:100%;display:flex;justify-content:space-between;align-items:center;gap:8px}
  @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.35}}
  .logo-live{animation:livePulse 1.8s ease-in-out infinite}
  .hero p{margin:8px 0 0;color:var(--muted);line-height:1.6;max-width:760px;font-size:12px}
@@ -166,7 +166,7 @@
 
  <header class="hero">
   <div>
-   <h1 class="hero-title"><img id="logoSlot" src="assets/logo.png" alt="盘中信息台" title="盘中信息台 · 板块资金流">盘中信息台<button class="btn" id="themeBtn" title="切换深色 / 浅色模式">🌙 深色</button></h1>
+   <h1 class="hero-title"><img id="logoSlot" src="assets/logo.png" alt="盘中信息台" title="盘中信息台 · 板块资金流">盘中信息台</h1>
    <p>A 股盘中实时信息台。当前模块：跟踪行业板块 / 概念 / 宽基指数的主力资金动向——当日累计净流入排行、分时累计曲线，并自动监测近 5 分钟的资金异动（急流入 / 急流出）。</p>
    <div class="hero-badge-row">
     <span class="badge" id="kindBadge">行业板块</span>
@@ -183,6 +183,9 @@
     <div>更新　<b id="updated">—</b>（截至 <span id="lastt">—</span>）</div>
     <div class="status-row"><span>下次刷新　<b id="countdown">—</b></span><button class="btn" id="refreshBtn" title="立即抓取一轮">↻ 立即刷新</button></div>
    </div>
+  </div>
+  <div class="hero-actions">
+   <button class="btn" id="themeBtn" title="切换深色 / 浅色模式">🌙 深色</button>
    <div class="btn-row">
     <button class="btn" id="kindIndustryBtn" title="行业板块（申万二级口径）">行业</button>
     <button class="btn secondary" id="kindConceptBtn" title="概念板块">概念</button>
