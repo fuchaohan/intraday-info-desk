@@ -36,8 +36,10 @@
  .hero-title{display:flex;align-items:center;gap:12px;min-width:0}
  .hero-title svg,.hero-title img{width:auto;height:48px;max-width:230px;flex:none;object-fit:contain;display:block}
  .hero-title img{filter:none}
- /* 操作行：hero 卡片下方的独立块——主题切换居左、口径按钮组居右 */
- .hero-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
+ /* 操作行：hero 卡片下方的独立块——主题切换居左、口径按钮组居右；卡片风格（边框/圆角/渐变底）与 hero 一致，行高更紧凑 */
+ .hero-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;
+  padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius);
+  background:linear-gradient(180deg,#fdfcf6,#f4f1e3)}
  @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.35}}
  .logo-live{animation:livePulse 1.8s ease-in-out infinite}
  .hero p{margin:8px 0 0;color:var(--muted);line-height:1.6;max-width:760px;font-size:12px}
@@ -139,6 +141,7 @@
     linear-gradient(180deg,#06101c 0%,#08111f 44%,#091522 100%);
  }
  body.dark .hero{background:linear-gradient(180deg,#1c2b47,#111c30);border-color:#0d1626}
+ body.dark .hero-actions{background:linear-gradient(180deg,#1c2b47,#111c30);border-color:#0d1626}
  body.dark .hero h1{color:#fff}
  body.dark .badge{border-color:#3a4f6e;background:#1d2c47;color:#c9d4e6}
  body.dark .global-status{background:#1d2c47;border-color:#3a4f6e;color:#b9c5da}
