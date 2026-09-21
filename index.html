@@ -252,6 +252,7 @@ const CFG = {
   kind:"industry", top:8, intervalSec:300, /* kind: industry=行业 / concept=概念 / broad=宽基指数 */
   anomalyWin:5, anomalyRank:3, anomalyFloor:2.0,
   host:"https://push2delay.eastmoney.com",
+  hosts:["https://push2delay.eastmoney.com","https://push2.eastmoney.com","https://push2his.eastmoney.com"], /* 失败按序轮询 */
 };
 /* 交易日历：精确到月日的全年交易日（含调休）。跨年后请更新 TRADE_CAL.year 与下方日历；
    未更新时回退为「周一至周五」近似判断，不会整年锁死在非交易日。 */
@@ -292,19 +293,30 @@ const cleanName = (n,industry=CFG.kind==="industry") => industry ? n.replace(/[�
    industry 参数传口径快照：抓取途中用户切换口径时，本轮仍按开始时的口径算完 */
 const accept = (n,industry=CFG.kind==="industry") => (industry ? SW2.has(n) : !isBasket(n)) && !BLOCKED.has(cleanName(n,industry));
 
-/* ============ JSONP 取数 ============ */
-let _ji=0;
-function jsonp(url){
-  return new Promise((resolve,reject)=>{
-    const cb="__sfcb"+(++_ji)+"_"+Date.now();
-    const s=document.createElement("script");let done=false;
-    const clean=()=>{window[cb]=()=>{};s.remove();}; /* 置为空函数兜底：超时后迟到的响应脚本静默落空，不再报 ReferenceError */
-    window[cb]=d=>{done=true;clean();resolve(d);};
-    s.onerror=()=>{if(!done){clean();reject(new Error("网络/跨域失败"));}};
-    s.src=url+(url.includes("?")?"&":"?")+"cb="+cb;
-    setTimeout(()=>{if(!done){clean();reject(new Error("超时"));}},20000);
-    document.body.appendChild(s);
-  });
+/* ============ 取数传输层 ============ */
+/* 东财已把接口响应 Content-Type 改为 text/plain，<script> 注入式 JSONP 被浏览器 MIME 检查拒绝（脚本不执行），
+   改用 fetch + CORS 直取 JSON；push2delay/push2/push2his 三主机轮询，避开单节点风控或 CORS 缺失 */
+async function jsonp(url){
+  const hosts=[CFG.host,...(CFG.hosts||[]).filter(h=>h!==CFG.host)];
+  let lastErr=new Error("无可用主机");
+  for(const h of hosts){
+    const ctl=new AbortController();
+    const tm=setTimeout(()=>ctl.abort(),10000);
+    try{
+      const r=await fetch(url.replace(CFG.host,h),{signal:ctl.signal});
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      const t=await r.text();
+      try{return JSON.parse(t);}
+      catch(e){ /* 兜底：若服务端仍按 cb 包装返回，则解析 JSONP 体 */
+        const m=t.match(/^[^(]+\(([\s\S]*)\)\s*;?\s*$/);
+        if(!m)throw new Error("响应非 JSON");
+        return JSON.parse(m[1]);
+      }
+    }catch(e){
+      lastErr=e.name==="AbortError"?new Error("超时"):new Error("网络/跨域失败："+(e&&e.message||e));
+    }finally{clearTimeout(tm);}
+  }
+  throw lastErr;
 }
 async function fetchAllSectors(industry){
   const fs=industry?"m:90+t:2":"m:90+t:3";
