@@ -256,6 +256,7 @@ const CFG = {
   kind:"industry", top:8, intervalSec:300, /* kind: industry=行业 / concept=概念 / broad=宽基指数 */
   anomalyWin:5, anomalyRank:3, anomalyFloor:2.0,
   proxy:"/api/em", /* 同源边缘函数代理（Cloudflare Pages functions/ 或 EdgeOne edge-functions/ 部署后生效），优先走 */
+  tsProxy:"/api/ts", /* Tushare 备用源代理（token 在平台环境变量 TUSHARE_TOKEN，不入库不下发） */
   peers:["https://stock.fch-nas.cc/api/em","https://index.fch-nas.top/api/em"], /* 跨平台兄弟域名互备（函数带 ACAO:*，可跨域调用） */
   hosts:["https://push2delay.eastmoney.com","https://push2.eastmoney.com","https://push2his.eastmoney.com"], /* 直连回退（无函数的托管如 GitHub Pages 用这条链） */
 };
@@ -305,7 +306,7 @@ const accept = (n,industry=CFG.kind==="industry") => (industry ? SW2.has(n) : !i
 function peerList(){
   try{return CFG.peers.filter(p=>new URL(p).origin!==location.origin);}catch(e){return CFG.peers||[];}
 }
-/* 数据源徽标：按最近一次成功取数命中的候选归类（sinaFallback 时由 refresh 显式指定） */
+/* 数据源徽标：按最近一次成功取数命中的候选归类（备用源模式由 refresh 显式指定） */
 function srcLabel(){
   if(!lastSrcURL)return ["—","#8a93a6"];
   if(lastSrcURL.includes("sina.com.cn"))return ["新浪财经 · 快照备用","#e6162d"];
@@ -370,6 +371,23 @@ async function fetchSinaBoards(industry){
   return Object.values(d).map(v=>{const f=v.split(",");
     return [f[0],f[1],+f[6]/1e8];
   }).filter(r=>Number.isFinite(r[2])&&r[1]);
+}
+/* Tushare 板块资金流（备用源，优先于新浪）：moneyflow_ind_dc，东财口径日频快照，
+   content_type 区分 行业/概念/地域；net_amount 为元。token 在边缘函数环境变量，浏览器不经手 */
+async function fetchTsBoards(industry){
+  const q="?api=moneyflow_ind_dc";
+  const cands=[
+    ...(CFG.tsProxy?[CFG.tsProxy+q]:[]),
+    ...peerList().map(p=>p.replace(/\/api\/em$/,"/api/ts")+q),
+  ];
+  const d=JSON.parse(await fetchText(cands));
+  if(d.code!==0)throw new Error("tushare: "+(d.msg||d.error||"失败"));
+  const f=(d.data||{}).fields,items=(d.data||{}).items||[];
+  if(!f||!items.length)throw new Error("tushare 空数据");
+  const ix=n=>f.indexOf(n),ct=ix("content_type"),nm=ix("name"),na=ix("net_amount");
+  const want=industry?"行业":"概念";
+  return items.filter(x=>x[ct]===want).map(x=>[x[ix("ts_code")]||x[nm],x[nm],x[na]/1e8])
+    .filter(r=>Number.isFinite(r[2])&&r[1]);
 }
 async function fetchAllSectors(industry){
   const fs=industry?"m:90+t:2":"m:90+t:3";
@@ -528,7 +546,7 @@ async function refresh(){
   EL.status.textContent="⏳ 抓取中…";
   try{
     const curr={};let nin=0,nout=0,picked;const fixed=FIXED[kind];
-    let sinaFallback=false;
+    let fbSrc=null; /* 备用源：null=东财主链路 / "tushare" / "sina" */
     if(fixed){ /* 固定名单型口径（宽基/指数）：直接抓，不经 clist 榜与白名单/篮子过滤 */
       picked=fixed;
     }else{
@@ -538,18 +556,25 @@ async function refresh(){
         for(const [c,n,v] of sectors){if(accept(n,industry)){const yi=v/1e8;curr[c]=[cleanName(n,industry),yi];if(yi>=0)nin++;else nout++;}}
         picked=selectSectors(sectors,CFG.top,industry);
       }else{
-        /* 东财全链路失败 → 新浪行业/概念快照降级：无分钟级曲线，仅榜单/广度/概览卡片 */
-        sinaFallback=true;
-        const sb=(await fetchSinaBoards(industry)).filter(r=>!BLOCKED.has(r[1]));
-        if(!sb.length)throw new Error("备用源亦无数据");
-        sb.sort((a,b)=>b[2]-a[2]);
-        for(const [,n,v] of sb){curr[n]=[n,v];if(v>=0)nin++;else nout++;}
+        /* 东财全链路失败 → 备用源降级链：Tushare（东财口径日频）→ 新浪快照；均无分钟级曲线，仅榜单/广度/卡片 */
+        let rows=null;
+        try{
+          rows=(await fetchTsBoards(industry)).filter(r=>!BLOCKED.has(r[1]));
+          if(rows.length)fbSrc="tushare";
+        }catch(e){rows=null;}
+        if(!rows||!rows.length){
+          rows=(await fetchSinaBoards(industry)).filter(r=>!BLOCKED.has(r[1]));
+          fbSrc="sina";
+        }
+        if(!rows.length)throw new Error("备用源亦无数据");
+        rows.sort((a,b)=>b[2]-a[2]);
+        for(const [,n,v] of rows){curr[n]=[n,v];if(v>=0)nin++;else nout++;}
         const seen=new Set();picked=[];
-        for(const r of sb.slice(0,CFG.top).concat(sb.slice(-CFG.top))){if(!seen.has(r[0])){seen.add(r[0]);picked.push([r[0],r[1]]);}}
+        for(const r of rows.slice(0,CFG.top).concat(rows.slice(-CFG.top))){if(!seen.has(r[0])){seen.add(r[0]);picked.push([r[0],r[1]]);}}
       }
     }
     let dataDate=null;const seriesList=[];
-    if(!sinaFallback){
+    if(!fbSrc){
       const got=await Promise.all(picked.map(([c,n])=>fetchIntraday(c).then(o=>[n,o]).catch(()=>[n,null])));
       for(const [n,o] of got){if(!o||!o.ser.length)continue;
         if(!dataDate&&o.date)dataDate=o.date;
@@ -558,27 +583,33 @@ async function refresh(){
     }
     seriesList.sort((a,b)=>b[2]-a[2]);
     /* 降级模式的榜单行（无分钟序列，仅末端值）；正常模式直接用 seriesList */
-    const rankRows=sinaFallback
+    const rankRows=fbSrc
       ?Object.values(curr).map(([n,v])=>[n,null,v]).sort((a,b)=>b[2]-a[2])
       :seriesList;
 
     const now=bjNow();const kindTxt=kind==="broad"?"宽基指数":kind==="index"?"指数":(industry?"行业":"概念")+"板块";
     const lastT=seriesList.length?seriesList[0][1][seriesList[0][1].length-1][0]:"—";
-    if(sinaFallback){
-      LASTDATA={list:[],title:kindTxt+" 新浪备用源快照（无分时）"};
-      EL.chartsvg.innerHTML='<div class="empty" style="padding:34px 10px;text-align:center;line-height:2.1">⚠ 东财接口全链路不可用，已切换新浪备用源（'+(industry?"证监会行业":"概念")+'快照口径，仅作相对排序参考）。<br>分钟级累计曲线与异动监测暂不可用；榜单 / 广度 / 概览卡片仍有效。</div>';
+    if(fbSrc){
+      const FB_TITLE={tushare:"Tushare 备用源快照（无分时）",sina:"新浪备用源快照（无分时）"};
+      const FB_NOTICE={
+        tushare:'⚠ 东财接口全链路不可用，已切换 Tushare 备用源（东财口径·日频快照）。<br>分钟级累计曲线与异动监测暂不可用；榜单 / 广度 / 概览卡片仍有效。',
+        sina:'⚠ 东财接口全链路不可用，已切换新浪备用源（'+(industry?"证监会行业":"概念")+'快照口径，仅作相对排序参考）。<br>分钟级累计曲线与异动监测暂不可用；榜单 / 广度 / 概览卡片仍有效。'
+      };
+      LASTDATA={list:[],title:kindTxt+" "+FB_TITLE[fbSrc]};
+      EL.chartsvg.innerHTML='<div class="empty" style="padding:34px 10px;text-align:center;line-height:2.1">'+FB_NOTICE[fbSrc]+'</div>';
     }else{
       LASTDATA={list:seriesList,title:kindTxt+" 主力资金净流入（累计·亿元）  截至 "+lastT};
       EL.chartsvg.innerHTML=renderSVG(LASTDATA.list,LASTDATA.title);
     }
     /* 数据源徽标：备用源显式指定；正常模式按最近一次成功取数的候选归类 */
-    if(sinaFallback)setSrcBadge("新浪财经 · 快照备用","#e6162d");
+    const FB_BADGE={tushare:["Tushare · 日频备用","#1f7ac2"],sina:["新浪财经 · 快照备用","#e6162d"]};
+    if(fbSrc)setSrcBadge(FB_BADGE[fbSrc][0],FB_BADGE[fbSrc][1]);
     else if(seriesList.length){const [st,sd]=srcLabel();setSrcBadge(st,sd);}
 
     // 榜单
     const lin=rankRows.filter(r=>r[2]>=0).slice(0,CFG.top);
     const lout=rankRows.filter(r=>r[2]<0).slice(-CFG.top).reverse();
-    const xcell=r=>(fixed||sinaFallback)?"":`<td class="x"><span class="b" data-n="${esc(r[0])}" title="屏蔽此板块">✕</span></td>`; /* 固定名单（宽基/指数）与备用源快照无屏蔽意义 */
+    const xcell=r=>(fixed||fbSrc)?"":`<td class="x"><span class="b" data-n="${esc(r[0])}" title="屏蔽此板块">✕</span></td>`; /* 固定名单（宽基/指数）与备用源快照无屏蔽意义 */
     let h="";lin.forEach(r=>h+=`<tr><td class="in">▲ ${esc(r[0])}</td><td class="v in">${fmt(r[2])}</td>${xcell(r)}</tr>`);
     lout.forEach(r=>h+=`<tr><td class="out">▼ ${esc(r[0])}</td><td class="v out">${fmt(r[2])}</td>${xcell(r)}</tr>`);
     EL.lb.innerHTML=h||'<tr><td class="empty">暂无</td></tr>';
