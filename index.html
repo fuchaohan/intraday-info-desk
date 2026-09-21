@@ -252,6 +252,7 @@ const CFG = {
   kind:"industry", top:8, intervalSec:300, /* kind: industry=行业 / concept=概念 / broad=宽基指数 */
   anomalyWin:5, anomalyRank:3, anomalyFloor:2.0,
   proxy:"/api/em", /* 同源边缘函数代理（Cloudflare Pages functions/ 或 EdgeOne edge-functions/ 部署后生效），优先走 */
+  peers:["https://stock.fch-nas.cc/api/em","https://index.fch-nas.top/api/em"], /* 跨平台兄弟域名互备（函数带 ACAO:*，可跨域调用） */
   hosts:["https://push2delay.eastmoney.com","https://push2.eastmoney.com","https://push2his.eastmoney.com"], /* 直连回退（无函数的托管如 GitHub Pages 用这条链） */
 };
 /* 交易日历：精确到月日的全年交易日（含调休）。跨年后请更新 TRADE_CAL.year 与下方日历；
@@ -294,13 +295,21 @@ const cleanName = (n,industry=CFG.kind==="industry") => industry ? n.replace(/[�
 const accept = (n,industry=CFG.kind==="industry") => (industry ? SW2.has(n) : !isBasket(n)) && !BLOCKED.has(cleanName(n,industry));
 
 /* ============ 取数传输层 ============ */
-/* 优先同源边缘函数代理（/api/em，服务端转发东财，无 CORS/MIME 问题），404/失败自动落回直连东财主机轮询 */
+/* 候选顺序：同源边缘函数代理 → 跨平台兄弟域名代理（互为备份，函数带 ACAO:*）→ 直连东财主机轮询。
+   同源打头延迟最低；兄弟域名在任一平台函数故障/出口被风控时兜底；直连是无函数托管（GitHub Pages）的最后手段 */
+function peerList(){
+  try{return CFG.peers.filter(p=>new URL(p).origin!==location.origin);}catch(e){return CFG.peers||[];}
+}
 async function jsonp(path){
-  const cands=[...(CFG.proxy?[CFG.proxy+path]:[]),...CFG.hosts.map(h=>h+path)];
+  const cands=[
+    ...(CFG.proxy?[CFG.proxy+path]:[]),
+    ...peerList().map(p=>p+path),
+    ...CFG.hosts.map(h=>h+path),
+  ];
   let lastErr=new Error("无可用地址");
   for(const u of cands){
     const ctl=new AbortController();
-    const tm=setTimeout(()=>ctl.abort(),10000);
+    const tm=setTimeout(()=>ctl.abort(),8000);
     try{
       const r=await fetch(u,{signal:ctl.signal});
       if(!r.ok)throw new Error("HTTP "+r.status);
