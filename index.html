@@ -296,14 +296,16 @@ const accept = (n,industry=CFG.kind==="industry") => (industry ? SW2.has(n) : !i
 
 /* ============ 取数传输层 ============ */
 /* 候选顺序：同源边缘函数代理 → 跨平台兄弟域名代理（互为备份，函数带 ACAO:*）→ 直连东财主机轮询。
+   代理用 ?path= 传东财路径（两平台函数路由均为精确匹配，一条 /api/em 路由通用）；
    同源打头延迟最低；兄弟域名在任一平台函数故障/出口被风控时兜底；直连是无函数托管（GitHub Pages）的最后手段 */
 function peerList(){
   try{return CFG.peers.filter(p=>new URL(p).origin!==location.origin);}catch(e){return CFG.peers||[];}
 }
 async function jsonp(path){
+  const q="?path="+encodeURIComponent(path);
   const cands=[
-    ...(CFG.proxy?[CFG.proxy+path]:[]),
-    ...peerList().map(p=>p+path),
+    ...(CFG.proxy?[CFG.proxy+q]:[]),
+    ...peerList().map(p=>p+q),
     ...CFG.hosts.map(h=>h+path),
   ];
   let lastErr=new Error("无可用地址");
