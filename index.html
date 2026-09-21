@@ -519,7 +519,7 @@ const EL = {
   logoSlot:$("logoSlot"), srcBadge:$("srcBadge"), kindIndustryBtn:$("kindIndustryBtn"), kindConceptBtn:$("kindConceptBtn"), kindBroadBtn:$("kindBroadBtn"), kindIndexBtn:$("kindIndexBtn"), themeBtn:$("themeBtn"), refreshBtn:$("refreshBtn"),
   blockBtn:$("blockBtn"), blockInput:$("blockInput"), blockChips:$("blockChips"),
 };
-let nextAt=0,busy=false,pendingToggle=false;
+let nextAt=0,busy=false,pendingToggle=false,failStreak=0;
 function fmt(v){return (v>=0?"+":"")+v.toFixed(1)+"亿";}
 async function refresh(){
   if(busy){pendingToggle=true;return;} /* 抓取进行中收到刷新请求：标记为待办，本轮结束后立即补一次 */
@@ -613,10 +613,14 @@ async function refresh(){
     EL.dataDate.textContent=dataDate||"—";
     EL.updated.textContent=now.toLocaleTimeString("zh-CN");
     EL.lastt.textContent=lastT;
+    failStreak=0;
     nextAt=Date.now()+CFG.intervalSec*1000;
   }catch(e){
-    EL.status.textContent="❌ 抓取失败："+e.message+"（30 秒后自动重试）";
-    nextAt=Date.now()+30000; /* 失败后 30 秒自动重试，不再永久停摆等手动刷新 */
+    /* 指数退避：连续失败时 30s→1m→2m→…封顶 10m，避免全链路故障下高频轮询持续刺激上游风控 */
+    failStreak++;
+    const backoff=Math.min(30000*Math.pow(2,failStreak-1),600000);
+    EL.status.textContent="❌ 抓取失败："+e.message+"（"+(backoff>=60000?(backoff/60000)+" 分钟":Math.round(backoff/1000)+" 秒")+"后自动重试）";
+    nextAt=Date.now()+backoff;
   }finally{busy=false;if(pendingToggle){pendingToggle=false;refresh();}}
 }
 function tick(){if(nextAt){let s=Math.max(0,Math.round((nextAt-Date.now())/1000));
