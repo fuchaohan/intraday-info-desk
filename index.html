@@ -251,8 +251,8 @@
 const CFG = {
   kind:"industry", top:8, intervalSec:300, /* kind: industry=行业 / concept=概念 / broad=宽基指数 */
   anomalyWin:5, anomalyRank:3, anomalyFloor:2.0,
-  host:"https://push2delay.eastmoney.com",
-  hosts:["https://push2delay.eastmoney.com","https://push2.eastmoney.com","https://push2his.eastmoney.com"], /* 失败按序轮询 */
+  proxy:"/api/em", /* 同源边缘函数代理（Cloudflare Pages functions/ 或 EdgeOne edge-functions/ 部署后生效），优先走 */
+  hosts:["https://push2delay.eastmoney.com","https://push2.eastmoney.com","https://push2his.eastmoney.com"], /* 直连回退（无函数的托管如 GitHub Pages 用这条链） */
 };
 /* 交易日历：精确到月日的全年交易日（含调休）。跨年后请更新 TRADE_CAL.year 与下方日历；
    未更新时回退为「周一至周五」近似判断，不会整年锁死在非交易日。 */
@@ -294,20 +294,19 @@ const cleanName = (n,industry=CFG.kind==="industry") => industry ? n.replace(/[�
 const accept = (n,industry=CFG.kind==="industry") => (industry ? SW2.has(n) : !isBasket(n)) && !BLOCKED.has(cleanName(n,industry));
 
 /* ============ 取数传输层 ============ */
-/* 东财已把接口响应 Content-Type 改为 text/plain，<script> 注入式 JSONP 被浏览器 MIME 检查拒绝（脚本不执行），
-   改用 fetch + CORS 直取 JSON；push2delay/push2/push2his 三主机轮询，避开单节点风控或 CORS 缺失 */
-async function jsonp(url){
-  const hosts=[CFG.host,...(CFG.hosts||[]).filter(h=>h!==CFG.host)];
-  let lastErr=new Error("无可用主机");
-  for(const h of hosts){
+/* 优先同源边缘函数代理（/api/em，服务端转发东财，无 CORS/MIME 问题），404/失败自动落回直连东财主机轮询 */
+async function jsonp(path){
+  const cands=[...(CFG.proxy?[CFG.proxy+path]:[]),...CFG.hosts.map(h=>h+path)];
+  let lastErr=new Error("无可用地址");
+  for(const u of cands){
     const ctl=new AbortController();
     const tm=setTimeout(()=>ctl.abort(),10000);
     try{
-      const r=await fetch(url.replace(CFG.host,h),{signal:ctl.signal});
+      const r=await fetch(u,{signal:ctl.signal});
       if(!r.ok)throw new Error("HTTP "+r.status);
       const t=await r.text();
       try{return JSON.parse(t);}
-      catch(e){ /* 兜底：若服务端仍按 cb 包装返回，则解析 JSONP 体 */
+      catch(e){ /* 兜底：直连东财仍可能返回 cb 包装体 */
         const m=t.match(/^[^(]+\(([\s\S]*)\)\s*;?\s*$/);
         if(!m)throw new Error("响应非 JSON");
         return JSON.parse(m[1]);
@@ -320,7 +319,7 @@ async function jsonp(url){
 }
 async function fetchAllSectors(industry){
   const fs=industry?"m:90+t:2":"m:90+t:3";
-  const page=pn=>`${CFG.host}/api/qt/clist/get?fid=f62&po=1&pz=100&pn=${pn}&np=1&fltt=2&invt=2&fs=${fs}&fields=f12,f14,f62`;
+  const page=pn=>`/api/qt/clist/get?fid=f62&po=1&pz=100&pn=${pn}&np=1&fltt=2&invt=2&fs=${fs}&fields=f12,f14,f62`;
   /* 先取第 1 页拿 total，据此算精确页数，再并行拉剩余页——既快又不发空页请求 */
   const first=await jsonp(page(1)).catch(()=>null);
   const total=(first&&first.data&&first.data.total)||0;
@@ -337,7 +336,7 @@ async function fetchAllSectors(industry){
 async function fetchIntraday(code){
   /* 板块代码为纯数字→自动补板块市场前缀 90.；宽基传完整 secid（如 1.000300）原样使用 */
   const secid=String(code).includes(".")?code:"90."+code;
-  const url=`${CFG.host}/api/qt/stock/fflow/kline/get?lmt=0&klt=1&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65&secid=${secid}`;
+  const url=`/api/qt/stock/fflow/kline/get?lmt=0&klt=1&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65&secid=${secid}`;
   const d=await jsonp(url);const kl=(d.data&&d.data.klines)||[];const ser=[];let date=null;
   for(const ln of kl){const p=ln.split(",");if(p.length<2)continue;
     const ts=p[0];
