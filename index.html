@@ -284,6 +284,27 @@ let BLOCKED = new Set();
 try{ BLOCKED = new Set(JSON.parse(localStorage.getItem('sf_blocked')||'[]')); }catch(e){}
 function saveBlocked(){ try{ localStorage.setItem('sf_blocked',JSON.stringify([...BLOCKED])); }catch(e){} }
 
+/* 断供回放缓存：按口径保存最近一次成功的分钟曲线；东财全断时回放（仅限最近交易日，过期作废） */
+function lastExpectedSession(){
+  const isTrade=x=>TRADE_CAL.days.has(pad2(x.getMonth()+1)+pad2(x.getDate()));
+  const key=x=>x.getFullYear()+"-"+pad2(x.getMonth()+1)+"-"+pad2(x.getDate());
+  const back=x=>{const y=new Date(x);for(let i=0;i<30;i++){y.setDate(y.getDate()-1);if(isTrade(y))return key(y);}return "";};
+  const d=new Date(bjNow());
+  /* 交易日 09:25（集合竞价）前，最新可用数据仍属前一交易日 */
+  if(isTrade(d)&&d.getHours()*60+d.getMinutes()>=565)return key(d);
+  return back(d);
+}
+function saveCurveCache(kind,list,title,date){
+  try{localStorage.setItem("sf_curve_"+kind,JSON.stringify({t:Date.now(),date,title,
+    list:list.map(([n,s,v])=>[n,s.map(pt=>[pt[0],+pt[1].toFixed(2)]),+v.toFixed(2)])}));}catch(e){}
+}
+function loadCurveCache(kind){
+  try{
+    const d=JSON.parse(localStorage.getItem("sf_curve_"+kind)||"null");
+    return (d&&d.list&&d.list.length&&d.date&&d.date===lastExpectedSession())?d:null;
+  }catch(e){return null;}
+}
+
 /* 宽基指数固定名单：[完整 secid, 显示名]。走与板块相同的指数主力资金流分钟线（secid=市场.代码），
    不经 clist 排行榜 / 白名单 / 屏蔽逻辑；中证2000 为中证自编指数，东财市场号是 2 */
 const BROAD=[["1.000016","上证50"],["1.000300","沪深300"],["1.000510","中证A500"],["1.000905","中证500"],["1.000852","中证1000"],["2.932000","中证2000"],["1.000688","科创50"],["0.399006","创业板指"],["0.899050","北证50"]];
@@ -478,7 +499,7 @@ function renderSVG(seriesList,title){
   })};
   return P.join("\n");
 }
-let LASTCHART=null;let LASTDATA={list:[],title:""};
+let LASTCHART=null;let LASTDATA={list:[],title:""};let curveNoteHTML="";
 
 /* ============ 异动 ============ */
 const HISTORY=[];
@@ -550,7 +571,15 @@ async function refresh(){
     }
     let dataDate=null;const seriesList=[];
     if(!sinaFallback){
-      const got=await Promise.all(picked.map(([c,n])=>fetchIntraday(c).then(o=>[n,o]).catch(()=>[n,null])));
+      /* 分钟线分批并发（4/批）+ 失败延时重试一次：降低突发限流导致的整批全灭 */
+      const got=[];
+      for(let i=0;i<picked.length;i+=4){
+        const chunk=picked.slice(i,i+4);
+        const part=await Promise.all(chunk.map(([c,n],j)=>
+          fetchIntraday(c).then(o=>[n,o]).catch(()=>new Promise(r=>setTimeout(()=>r(
+            fetchIntraday(c).then(o=>[n,o]).catch(()=>[n,null])),300+150*j)))));
+        got.push(...part);
+      }
       for(const [n,o] of got){if(!o||!o.ser.length)continue;
         if(!dataDate&&o.date)dataDate=o.date;
         const v=o.ser[o.ser.length-1][1];seriesList.push([n,o.ser,v]);
@@ -565,10 +594,21 @@ async function refresh(){
     const now=bjNow();const kindTxt=kind==="broad"?"宽基指数":kind==="index"?"指数":(industry?"行业":"概念")+"板块";
     const lastT=seriesList.length?seriesList[0][1][seriesList[0][1].length-1][0]:"—";
     if(sinaFallback){
-      LASTDATA={list:[],title:kindTxt+" 新浪备用源快照（无分时）"};
-      EL.chartsvg.innerHTML='<div class="empty" style="padding:34px 10px;text-align:center;line-height:2.1">⚠ 东财接口全链路不可用，已切换新浪备用源（'+(industry?"证监会行业":"概念")+'快照口径，仅作相对排序参考）。<br>分钟级累计曲线与异动监测暂不可用；榜单 / 广度 / 概览卡片仍有效。</div>';
+      const cache=loadCurveCache(kind);
+      if(cache){
+        /* 断供回放：最近交易日的缓存曲线（冻结于断供时刻）；榜单/广度仍用备用源实时快照 */
+        curveNoteHTML='<div class="empty" style="padding:8px 10px;text-align:center">⚠ 东财接口全链路不可用，数据源已切换为新浪快照（榜单/广度仍实时）。下方曲线为缓存回放，冻结于 '+new Date(cache.t).toLocaleTimeString("zh-CN")+'（数据时点 '+cache.date+'）。</div>';
+        LASTDATA={list:cache.list,title:(cache.title||"主力资金净流入（累计·亿元）")+" ·【缓存回放】"};
+        EL.chartsvg.innerHTML=curveNoteHTML+renderSVG(LASTDATA.list,LASTDATA.title);
+      }else{
+        curveNoteHTML='<div class="empty" style="padding:34px 10px;text-align:center;line-height:2.1">⚠ 东财接口全链路不可用，已切换新浪备用源（'+(industry?"证监会行业":"概念")+'快照口径，仅作相对排序参考）。<br>分钟级累计曲线与异动监测暂不可用（本机无最近交易日的缓存曲线）；榜单 / 广度 / 概览卡片仍有效。</div>';
+        LASTDATA={list:[],title:kindTxt+" 新浪备用源快照（无分时）"};
+        EL.chartsvg.innerHTML=curveNoteHTML;
+      }
     }else{
+      curveNoteHTML="";
       LASTDATA={list:seriesList,title:kindTxt+" 主力资金净流入（累计·亿元）  截至 "+lastT};
+      if(seriesList.length)saveCurveCache(kind,seriesList,LASTDATA.title,dataDate||""); /* 空序列不覆盖好缓存（东财抖动时分钟线可能全失败） */
       EL.chartsvg.innerHTML=renderSVG(LASTDATA.list,LASTDATA.title);
     }
     /* 数据源徽标：备用源显式指定；正常模式按最近一次成功取数的候选归类 */
@@ -650,7 +690,7 @@ function applyTheme(){document.body.classList.toggle("dark",dark);
   EL.themeBtn.textContent=dark?"☀️ 浅色":"🌙 深色";
   EL.logoSlot.src=dark?"assets/logo.png":"assets/logo-light.png";
   try{localStorage.setItem("sf_theme",dark?"dark":"light");}catch(e){}
-  if(LASTDATA.list.length)EL.chartsvg.innerHTML=renderSVG(LASTDATA.list,LASTDATA.title);}
+  if(LASTDATA.list.length)EL.chartsvg.innerHTML=curveNoteHTML+renderSVG(LASTDATA.list,LASTDATA.title);}
 EL.themeBtn.onclick=()=>{dark=!dark;applyTheme();};
 applyTheme();
 EL.refreshBtn.onclick=()=>{if(!busy)refresh();};
