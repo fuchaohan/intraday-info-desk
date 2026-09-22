@@ -654,7 +654,7 @@ async function refresh(){
     EL.updated.textContent=now.toLocaleTimeString("zh-CN");
     EL.lastt.textContent=lastT;
     failStreak=0;
-    nextAt=Date.now()+CFG.intervalSec*1000;
+    nextAt=Date.now()+CFG.intervalSec*1000+(Math.random()*60000-30000); /* 5 分钟 ±30 秒抖动：避免整点同步触发上游突发风控 */
   }catch(e){
     /* 指数退避：连续失败时 30s→1m→2m→…封顶 10m，避免全链路故障下高频轮询持续刺激上游风控 */
     failStreak++;
