@@ -340,20 +340,42 @@ function setSrcBadge(txt,dot){
 }
 function buildCands(path){
   const q="?path="+encodeURIComponent(path);
+  /* 直连排最前：脚本注入不受 CORS 限制、实测最快（~200ms）；函数代理与兄弟域名退为兜底 */
   return [
+    ...CFG.hosts.map(h=>h+path),
     ...(CFG.proxy?[CFG.proxy+q]:[]),
     ...peerList().map(p=>p+q),
-    ...CFG.hosts.map(h=>h+path),
   ];
 }
 let lastSrcURL=""; /* 最近一次成功取数命中的候选 URL（数据源徽标用） */
+const isDirectEM = u => CFG.hosts.some(h=>u.startsWith(h));
+/* 脚本注入取 JSON：东财不发 Access-Control-Allow-Origin，fetch 读不到响应体，只有 <script> 能拿到。
+   referrerPolicy=no-referrer 是硬要求：东财 WAF 会按 Referer 直接掐断 *.fch-nas.top 的连接
+   （TLS 握手后立即 reset），去掉 Referer 才放行。带 cb 参数时东财返回 application/javascript 的包装体。 */
+function jsonpScript(url){
+  return new Promise((resolve,reject)=>{
+    const cb="__sfcb"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+    const s=document.createElement("script");let done=false;
+    const clean=()=>{window[cb]=()=>{};s.remove();}; /* 置空函数兜底：迟到的响应静默落空 */
+    const tm=setTimeout(()=>{if(!done){clean();reject(new Error("超时"));}},8000);
+    window[cb]=d=>{done=true;clearTimeout(tm);clean();resolve(JSON.stringify(d));};
+    s.onerror=()=>{if(!done){done=true;clearTimeout(tm);clean();reject(new Error("网络/跨域失败"));}};
+    s.referrerPolicy="no-referrer";
+    s.src=url+(url.includes("?")?"&":"?")+"cb="+cb;
+    document.body.appendChild(s);
+  });
+}
 async function fetchText(cands){
   let lastErr=new Error("无可用地址");
   for(const u of cands){
+    if(isDirectEM(u)){
+      try{lastSrcURL=u;return await jsonpScript(u);}
+      catch(e){lastErr=new Error("网络/跨域失败："+(e&&e.message||e));continue;}
+    }
     const ctl=new AbortController();
-    const tm=setTimeout(()=>ctl.abort(),8000);
+    const tm=setTimeout(()=>ctl.abort(),6000);
     try{
-      const r=await fetch(u,{signal:ctl.signal});
+      const r=await fetch(u,{signal:ctl.signal,referrerPolicy:"no-referrer"});
       if(!r.ok)throw new Error("HTTP "+r.status);
       lastSrcURL=u;
       return await r.text();
@@ -376,21 +398,42 @@ async function jsonp(path){
    [代码,名称,家数,均价,涨跌幅,?,净流入(元),...,领涨股...]；f6 为唯一板块级资金数值，
    口径以新浪为准（与东财主力口径不同，仅作相对排序参考）。仅东财全链路失败时启用 */
 async function fetchSinaBoards(industry){
-  const p="/q/view/newFLJK.php?param="+(industry?"industry":"class");
+  const param=industry?"industry":"class";
+  const p="/q/view/newFLJK.php?param="+param;
   const q="?path="+encodeURIComponent(p);
-  /* 直连候选是新浪自己的域名（东财主机不含此路径）；无 CORS，通常只有代理链路可用 */
+  /* 直连候选是新浪自己的域名（东财主机不含此路径）；无 CORS，fetch 读不到，只能用脚本注入 */
   const cands=[
     ...(CFG.proxy?[CFG.proxy+q]:[]),
     ...peerList().map(x=>x+q),
-    "https://vip.stock.finance.sina.com.cn"+p,
   ];
-  const t=await fetchText(cands);
+  let t=null;
+  try{ t=await fetchText(cands); }catch(e){ t=await sinaScript(industry); lastSrcURL="https://vip.stock.finance.sina.com.cn"+p; }
   const m=t.match(/=\s*(\{[\s\S]*\})/);
   if(!m)throw new Error("新浪备用源响应异常");
   const d=JSON.parse(m[1]);
   return Object.values(d).map(v=>{const f=v.split(",");
     return [f[0],f[1],+f[6]/1e8];
   }).filter(r=>Number.isFinite(r[2])&&r[1]);
+}
+/* 新浪 newFLJK.php 返回 `var S_Finance_bankuai_industry = {...};`，脚本注入后直接读全局变量 */
+function sinaScript(industry){
+  const param=industry?"industry":"class";
+  const varName="S_Finance_bankuai_"+param;
+  const url="https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php?param="+param;
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement("script");let done=false;
+    const tm=setTimeout(()=>{if(!done){done=true;s.remove();reject(new Error("超时"));}},8000);
+    const finish=ok=>{
+      if(done)return;done=true;clearTimeout(tm);s.remove();
+      const v=window[varName];
+      if(ok&&v)resolve("="+JSON.stringify(v));else reject(new Error("新浪备用源不可用"));
+    };
+    s.onload=()=>finish(true);
+    s.onerror=()=>finish(false);
+    s.referrerPolicy="no-referrer";
+    s.src=url;
+    document.body.appendChild(s);
+  });
 }
 async function fetchAllSectors(industry){
   const fs=industry?"m:90+t:2":"m:90+t:3";

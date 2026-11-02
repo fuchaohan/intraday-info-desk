@@ -7,14 +7,23 @@ const UPSTREAMS_EAST = [
   "https://push2delay.eastmoney.com",
   "https://push2.eastmoney.com",
   "https://push2his.eastmoney.com",
+  /* 编号镜像：机房 IP 段对主域名封禁时，编号边缘节点常仍可用（akshare 亦用此类镜像轮询） */
+  "https://1.push2.eastmoney.com",
+  "https://2.push2.eastmoney.com",
+  "https://7.push2.eastmoney.com",
+  "https://29.push2.eastmoney.com",
+  "https://82.push2.eastmoney.com",
+  "https://91.push2.eastmoney.com",
 ];
 const UPSTREAMS_SINA = ["https://vip.stock.finance.sina.com.cn"];
-const UPSTREAM_TIMEOUT_MS = 12000;
+const UPSTREAM_TIMEOUT_MS = 6000;
 
 /* 按路径前缀选上游：东财行情接口 / 新浪板块资金流快照（GBK 编码，边缘侧转 UTF-8） */
 const ROUTES = [
+  /* 不发送 Referer：东财 WAF 会按 Referer 掐断被列黑名单的域名（如 *.fch-nas.top），
+     不带 Referer 时放行；带 quote.eastmoney.com 在国内宽带上可用，但机房出口仍会被压制 */
   { re: /^\/api\/qt\/[\w./-]+(\?.*)?$/, upstreams: UPSTREAMS_EAST,
-    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Referer": "https://quote.eastmoney.com/", "Accept": "application/json,text/plain,*/*" } },
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept": "application/json,text/plain,*/*", "Accept-Language": "zh-CN,zh;q=0.9" } },
   { re: /^\/q\/view\/newFLJK\.php(\?.*)?$/, upstreams: UPSTREAMS_SINA, gbk: true,
     headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Referer": "https://finance.sina.com.cn/" } },
 ];
